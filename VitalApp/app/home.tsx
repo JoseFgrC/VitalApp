@@ -635,7 +635,7 @@ export default function HomeScreen() {
                 <Ionicons name="fitness" size={28} color={colors.isDark ? '#60A5FA' : '#1E3A8A'} />
               </View>
               <Text style={[styles.statNumber, { color: colors.text }]}>{weeklyStats.exercises}</Text>
-              <Text style={[styles.statLabel, { color: colors.textSecondary }]}>EJERCICIOS</Text>
+              <Text style={[styles.statLabel, { color: colors.textSecondary }]} numberOfLines={2}>Ejercicios</Text>
             </TouchableOpacity>
             
             <TouchableOpacity style={styles.statCard} onPress={irAEstadisticas} activeOpacity={0.8}>
@@ -643,7 +643,7 @@ export default function HomeScreen() {
                 <FontAwesome5 name="fire" size={24} color={colors.isDark ? '#FBBF24' : '#D97706'} />
               </View>
               <Text style={[styles.statNumber, { color: colors.text }]}>{weeklyStats.calories}</Text>
-              <Text style={[styles.statLabel, { color: colors.textSecondary }]}>KCAL</Text>
+              <Text style={[styles.statLabel, { color: colors.textSecondary }]} numberOfLines={2}>Calorías</Text>
             </TouchableOpacity>
             
             <TouchableOpacity style={styles.statCard} onPress={irAEstadisticas} activeOpacity={0.8}>
@@ -651,7 +651,7 @@ export default function HomeScreen() {
                 <Ionicons name="time" size={28} color={colors.isDark ? '#34D399' : '#059669'} />
               </View>
               <Text style={[styles.statNumber, { color: colors.text }]}>{weeklyStats.minutes}</Text>
-              <Text style={[styles.statLabel, { color: colors.textSecondary }]}>MINUTOS</Text>
+              <Text style={[styles.statLabel, { color: colors.textSecondary }]} numberOfLines={2}>Minutos</Text>
             </TouchableOpacity>
           </View>
         </LinearGradient>
@@ -775,7 +775,7 @@ export default function HomeScreen() {
               <Text style={[styles.goalTitle, { color: colors.text }]}>Meta Semanal</Text>
             </View>
             <View style={[styles.goalBadge, colors.isDark && { backgroundColor: '#1E3A8A' }]}>
-              <Text style={styles.goalProgress}>
+              <Text style={[styles.goalProgress, colors.isDark && { color: '#DBEAFE' }]}>
                 {weeklyStats.weeklyGoal} de {weeklyStats.totalGoal}
               </Text>
             </View>
@@ -784,7 +784,7 @@ export default function HomeScreen() {
           <View style={styles.progressContainer}>
             <View style={styles.progressHeader}>
               <Text style={[styles.progressText, { color: colors.textSecondary }]}>Progreso Total</Text>
-              <Text style={styles.progressPercentage}>{progressPercentage}%</Text>
+              <Text style={[styles.progressPercentage, colors.isDark && { color: '#6EE7B7' }]}>{progressPercentage}%</Text>
             </View>
             <View style={[styles.progressBar, colors.isDark && { backgroundColor: '#334155' }]}>
               <LinearGradient
@@ -843,7 +843,7 @@ export default function HomeScreen() {
             <Text style={[styles.dayNumber, { color: colors.text }]}>Día {today.getDate()}</Text>
             <TouchableOpacity style={[styles.dayBadge, colors.isDark && { backgroundColor: '#334155' }]} onPress={reiniciarProgreso}>
               <Ionicons name="refresh" size={18} color={colors.textSecondary} />
-              <Text style={[styles.dayBadgeText, { color: colors.textSecondary }]}>Reiniciar</Text>
+              <Text style={[styles.dayBadgeText, { color: colors.text }]}>Reiniciar</Text>
             </TouchableOpacity>
           </View>
           <View style={styles.daySelector}>
@@ -859,9 +859,10 @@ export default function HomeScreen() {
               >
                 <Text style={[
                   styles.dayText, 
-                  { color: colors.textSecondary },
+                  { color: colors.isDark ? '#E2E8F0' : colors.textSecondary },
                   day.active && styles.activeDayText,
-                  day.locked && styles.lockedDayText
+                  day.locked && styles.lockedDayText,
+                  day.locked && colors.isDark && { color: '#CBD5E1' }
                 ]}>
                   {day.day}
                 </Text>
@@ -869,7 +870,8 @@ export default function HomeScreen() {
                   styles.dateText, 
                   { color: colors.text },
                   day.active && styles.activeDayText,
-                  day.locked && styles.lockedDayText
+                  day.locked && styles.lockedDayText,
+                  day.locked && colors.isDark && { color: '#CBD5E1' }
                 ]}>
                   {day.locked ? (
                     <Ionicons name="lock-closed" size={14} color={colors.textSecondary} />
@@ -886,7 +888,7 @@ export default function HomeScreen() {
             Por tu valoración, consulta a tu médico antes de hacer ejercicio. Cuando te autorice, repite la valoración para ver tus rutinas.
           </Text>
           <TouchableOpacity onPress={() => router.push('/valoracion')} style={{ marginTop: 12, minHeight: 56, justifyContent: 'center' }}>
-            <Text style={[styles.seeAllText, { fontSize: 19 }]}>Repetir la valoración</Text>
+            <Text style={[styles.seeAllText, { fontSize: 19 }, colors.isDark && { color: '#93C5FD' }]}>Repetir la valoración</Text>
           </TouchableOpacity>
         </View>
         ) : (
@@ -896,7 +898,7 @@ export default function HomeScreen() {
           <View style={styles.sectionHeader}>
             <Text style={[styles.sectionTitle, { color: colors.text }]}>Recomendados para ti</Text>
             <TouchableOpacity onPress={irAEjercicios}>
-              <Text style={styles.seeAllText}>Ver todos</Text>
+              <Text style={[styles.seeAllText, colors.isDark && { color: '#93C5FD' }]}>Ver todos</Text>
             </TouchableOpacity>
           </View>
           <Text style={[styles.sectionSubtitle, { color: colors.textSecondary }]}>
@@ -918,7 +920,7 @@ export default function HomeScreen() {
                   <Text style={[styles.cardTitle, { color: colors.text }]} numberOfLines={2}>{workout.title}</Text>
                   <View style={styles.razonRow}>
                     <Ionicons name="checkmark-circle" size={16} color="#059669" />
-                    <Text style={styles.razonText} numberOfLines={1}>{workout.razon}</Text>
+                    <Text style={[styles.razonText, colors.isDark && { color: '#6EE7B7' }]} numberOfLines={1}>{workout.razon}</Text>
                   </View>
                   <View style={styles.cardInfoRow}>
                     <View style={styles.cardTimeBadge}>
@@ -991,7 +993,7 @@ export default function HomeScreen() {
             ) : (
               <View style={[styles.workoutBadge, colors.isDark && { backgroundColor: '#1E3A8A' }]}>
                 <Ionicons name="time" size={16} color="#60A5FA" />
-                <Text style={styles.workoutInfo}>{currentWorkout.time}</Text>
+                <Text style={[styles.workoutInfo, colors.isDark && { color: '#DBEAFE' }]}>{currentWorkout.time}</Text>
               </View>
             )}
           </View>
@@ -1058,7 +1060,7 @@ export default function HomeScreen() {
                     <Text style={[styles.wellnessTitle, { color: colors.text }]}>Centro de Bienestar</Text>
                 </View>
                 <TouchableOpacity onPress={() => router.push('/recordatorios')}>
-                    <Text style={styles.seeAllText}>Configurar</Text>
+                    <Text style={[styles.seeAllText, colors.isDark && { color: '#93C5FD' }]}>Configurar</Text>
                 </TouchableOpacity>
             </View>
 
@@ -1067,7 +1069,7 @@ export default function HomeScreen() {
                 <View style={[styles.wellnessItem, { backgroundColor: colors.isDark ? '#1E293B' : '#EFF6FF' }]}>
                     <Ionicons name="water" size={32} color="#3B82F6" />
                     <Text style={[styles.wellnessValue, { color: colors.text }]}>{hydration} / 8</Text>
-                    <Text style={[styles.wellnessLabel, { color: colors.textSecondary }]}>Vasos Agua</Text>
+                    <Text style={[styles.wellnessLabel, { color: colors.text }]}>Vasos Agua</Text>
                     <View style={styles.wellnessControls}>
                         <TouchableOpacity onPress={() => cambiarHydration(-1)} style={styles.miniBtn}>
                             <Ionicons name="remove" size={18} color="#3B82F6" />
@@ -1084,12 +1086,12 @@ export default function HomeScreen() {
                     onPress={() => router.push('/recordatorios')}
                 >
                     <Ionicons name="alarm" size={32} color="#EF4444" />
-                    <Text style={[styles.wellnessValue, { color: colors.text, fontSize: proximoRecordatorio ? 16 : 20 }]} numberOfLines={2}>
+                    <Text style={[styles.wellnessValue, { color: colors.text, fontSize: proximoRecordatorio ? 18 : 20 }]} numberOfLines={2}>
                         {proximoRecordatorio || 'Sin horario'}
                     </Text>
-                    <Text style={[styles.wellnessLabel, { color: colors.textSecondary }]}>Próximo ejercicio</Text>
+                    <Text style={[styles.wellnessLabel, { color: colors.text }]}>Próximo ejercicio</Text>
                     <View style={[styles.miniBtn, { marginTop: 10, width: '80%' }]}>
-                        <Text style={{ fontSize: 11, fontWeight: '800', color: '#EF4444' }}>HORARIOS</Text>
+                        <Text style={{ fontSize: 18, fontWeight: '800', color: '#B91C1C' }}>HORARIOS</Text>
                     </View>
                 </TouchableOpacity>
 
@@ -1097,7 +1099,7 @@ export default function HomeScreen() {
                 <View style={[styles.wellnessItem, { backgroundColor: colors.isDark ? '#1E293B' : '#F0FDF4' }]}>
                     <Ionicons name="scale" size={32} color="#10B981" />
                     <Text style={[styles.wellnessValue, { color: colors.text }]}>{peso} kg</Text>
-                    <Text style={[styles.wellnessLabel, { color: colors.textSecondary }]}>Mi Peso</Text>
+                    <Text style={[styles.wellnessLabel, { color: colors.text }]}>Mi Peso</Text>
                     <View style={styles.wellnessControls}>
                         <TouchableOpacity onPress={() => cambiarPeso(-1)} style={styles.miniBtn}>
                             <Ionicons name="remove" size={18} color="#10B981" />
@@ -1112,9 +1114,9 @@ export default function HomeScreen() {
             <View style={[styles.motivationCard, { marginTop: 20, marginHorizontal: 0, backgroundColor: colors.isDark ? '#1E293B' : '#FFFBEB' }]}>
                 <View style={styles.motivationHeader}>
                     <Ionicons name="bulb" size={20} color="#D97706" />
-                    <Text style={[styles.motivationTitle, { fontSize: 14 }]}>Consejo de Salud</Text>
+                    <Text style={[styles.motivationTitle, { fontSize: 18 }, colors.isDark && { color: '#FBBF24' }]}>Consejo de salud</Text>
                 </View>
-                <Text style={[styles.motivationText, { fontSize: 13, lineHeight: 18 }]}>
+                <Text style={[styles.motivationText, { fontSize: 18, lineHeight: 24 }, colors.isDark && { color: '#FDE68A' }]}>
                     Recuerda que mantenerte hidratado ayuda a tu concentración y energía diaria. ¡Bebe un poco de agua ahora!
                 </Text>
             </View>
@@ -1127,7 +1129,7 @@ export default function HomeScreen() {
           activeOpacity={0.8}
         >
           <Ionicons name="log-out-outline" size={24} color="#DC2626" />
-          <Text style={styles.logoutText}>Cerrar sesión</Text>
+          <Text style={[styles.logoutText, colors.isDark && { color: '#FCA5A5' }]}>Cerrar sesión</Text>
         </TouchableOpacity>
 
       </ScrollView>
@@ -1183,7 +1185,7 @@ const styles = StyleSheet.create({
     fontSize: 28, fontWeight: '800', color: '#FFFFFF'
   },
   headerGreetingSub: {
-    fontSize: 16, color: '#DBEAFE', fontWeight: '500', marginTop: 4
+    fontSize: 18, color: '#DBEAFE', fontWeight: '500', marginTop: 4
   },
   profileAvatar: {
     backgroundColor: 'rgba(255,255,255,0.2)', width: 52, height: 52, borderRadius: 26,
@@ -1212,9 +1214,9 @@ const styles = StyleSheet.create({
     width: 48, height: 48, borderRadius: 24, backgroundColor: '#EFF6FF',
     justifyContent: 'center', alignItems: 'center', marginBottom: 10,
   },
-  statCard: { alignItems: 'center', width: '30%' },
+  statCard: { alignItems: 'center', flex: 1, minWidth: 0, paddingHorizontal: 2 },
   statNumber: { fontSize: 24, fontWeight: '900', color: '#1E293B' },
-  statLabel: { fontSize: 13, color: '#64748B', fontWeight: '700', marginTop: 4 },
+  statLabel: { fontSize: 18, color: '#64748B', fontWeight: '700', marginTop: 4, textAlign: 'center' },
   motivationBanner: {
     marginHorizontal: 20, marginTop: -20, marginBottom: 20, borderRadius: 24,
     backgroundColor: '#FFFFFF',
@@ -1242,7 +1244,7 @@ const styles = StyleSheet.create({
   bannerEmoji: { fontSize: 32 },
   bannerTextContainer: { flex: 1 },
   bannerTitle: { fontSize: 20, fontWeight: '800', color: '#1E293B', marginBottom: 4 },
-  bannerSubtitle: { fontSize: 16, color: '#475569', lineHeight: 22 },
+  bannerSubtitle: { fontSize: 18, color: '#475569', lineHeight: 24 },
   weeklyGoal: {
     backgroundColor: '#FFFFFF', padding: 24, marginHorizontal: 20, marginBottom: 16, borderRadius: 24,
     ...Platform.select({
@@ -1265,12 +1267,12 @@ const styles = StyleSheet.create({
   goalTitleContainer: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   goalTitle: { fontSize: 18, fontWeight: '800', color: '#1E293B' },
   goalBadge: { backgroundColor: '#EFF6FF', paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20 },
-  goalProgress: { fontSize: 16, color: '#2563EB', fontWeight: '800' },
+  goalProgress: { fontSize: 18, color: '#2563EB', fontWeight: '800' },
   challengeText: { fontSize: 24, fontWeight: '900', color: '#0F172A', marginBottom: 20 },
   progressContainer: { marginTop: 4 },
   progressHeader: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 12 },
-  progressText: { fontSize: 16, color: '#64748B', fontWeight: '600' },
-  progressPercentage: { fontSize: 16, color: '#059669', fontWeight: '800' },
+  progressText: { fontSize: 18, color: '#64748B', fontWeight: '600' },
+  progressPercentage: { fontSize: 18, color: '#047857', fontWeight: '800' },
   progressBar: { height: 12, backgroundColor: '#F1F5F9', borderRadius: 6, overflow: 'hidden' },
   progressFill: { height: '100%', borderRadius: 6 },
   daySection: {
@@ -1294,15 +1296,15 @@ const styles = StyleSheet.create({
   dayHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
   dayNumber: { fontSize: 32, fontWeight: '900', color: '#1E293B' },
   dayBadge: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#F1F5F9', paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20, gap: 6 },
-  dayBadgeText: { fontSize: 16, color: '#475569', fontWeight: '700' },
+  dayBadgeText: { fontSize: 18, color: '#475569', fontWeight: '700' },
   daySelector: { flexDirection: 'row', justifyContent: 'space-between' },
   dayButton: { alignItems: 'center', paddingVertical: 12, borderRadius: 16, backgroundColor: '#F8FAFC', width: '15%', borderWidth: 1, borderColor: '#F1F5F9' },
   activeDayButton: { backgroundColor: '#2563EB', borderColor: '#2563EB' },
-  lockedDayButton: { backgroundColor: '#F1F5F9', opacity: 0.6 },
-  dayText: { fontSize: 14, color: '#64748B', fontWeight: '700', marginBottom: 6 },
+  lockedDayButton: { backgroundColor: '#F1F5F9' },
+  dayText: { fontSize: 18, color: '#64748B', fontWeight: '700', marginBottom: 6 },
   dateText: { fontSize: 18, color: '#1E293B', fontWeight: '800' },
   activeDayText: { color: '#FFFFFF' },
-  lockedDayText: { color: '#94A3B8' },
+  lockedDayText: { color: '#475569' },
   discoverSection: {
     padding: 24, backgroundColor: '#FFFFFF', marginHorizontal: 20, marginBottom: 16, borderRadius: 24,
     ...Platform.select({
@@ -1323,8 +1325,8 @@ const styles = StyleSheet.create({
   },
   sectionHeader: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8, gap: 8 },
   sectionTitle: { fontSize: 24, fontWeight: '900', color: '#1E293B' },
-  seeAllText: { fontSize: 16, color: '#2563EB', fontWeight: '700' },
-  sectionSubtitle: { fontSize: 16, color: '#64748B', fontWeight: '500', marginBottom: 20 },
+  seeAllText: { fontSize: 18, color: '#2563EB', fontWeight: '700' },
+  sectionSubtitle: { fontSize: 18, color: '#64748B', fontWeight: '500', marginBottom: 20 },
   discoverScroll: { overflow: 'visible' },
   discoverCard: {
     backgroundColor: '#FFFFFF', borderRadius: 20, marginRight: 16, width: 220,
@@ -1335,18 +1337,18 @@ const styles = StyleSheet.create({
   discoverCardBody: { padding: 16 },
   cardTitle: { fontSize: 18, fontWeight: '800', color: '#1E293B', marginBottom: 6, height: 46 },
   razonRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 10 },
-  razonText: { fontSize: 14, fontWeight: '700', color: '#059669', flexShrink: 1 },
+  razonText: { fontSize: 18, fontWeight: '700', color: '#047857', flexShrink: 1 },
   badgeCompletada: { backgroundColor: '#059669' },
   hechoText: { color: '#059669', fontWeight: '800' },
-  rutinaAvance: { fontSize: 16, fontWeight: '600', textAlign: 'center', marginTop: 12 },
+  rutinaAvance: { fontSize: 18, fontWeight: '600', textAlign: 'center', marginTop: 12 },
   rutinaListaBox: { marginTop: 14, padding: 16, borderRadius: 16, backgroundColor: '#ECFDF5', borderWidth: 1, borderColor: '#6EE7B7' },
   rutinaListaTitulo: { fontSize: 18, fontWeight: '800', color: '#065F46', marginBottom: 4 },
-  rutinaListaTexto: { fontSize: 15, color: '#065F46', lineHeight: 21 },
+  rutinaListaTexto: { fontSize: 18, color: '#065F46', lineHeight: 24 },
   cardInfoRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   cardTimeBadge: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  cardTime: { fontSize: 14, color: '#64748B', fontWeight: '600' },
+  cardTime: { fontSize: 18, color: '#64748B', fontWeight: '600' },
   intensityBadge: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 12 },
-  cardIntensity: { fontSize: 16, fontWeight: '800' },
+  cardIntensity: { fontSize: 18, fontWeight: '800' },
   todayWorkout: {
     backgroundColor: '#FFFFFF', padding: 24, marginHorizontal: 20, marginBottom: 16, borderRadius: 24,
     ...Platform.select({
@@ -1368,7 +1370,7 @@ const styles = StyleSheet.create({
   workoutHeader: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20, rowGap: 8, columnGap: 12 },
   workoutTitle: { fontSize: 22, fontWeight: '900', color: '#1E293B', flexGrow: 1, flexShrink: 1, minWidth: 160 },
   workoutBadge: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#EFF6FF', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 16, gap: 6 },
-  workoutInfo: { fontSize: 14, color: '#2563EB', fontWeight: '700' },
+  workoutInfo: { fontSize: 18, color: '#2563EB', fontWeight: '700' },
   exerciseItem: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
     paddingVertical: 16, borderBottomWidth: 1, borderBottomColor: '#F1F5F9',
@@ -1377,7 +1379,7 @@ const styles = StyleSheet.create({
   exerciseIcon: { fontSize: 24 },
   exerciseInfo: { flex: 1, marginLeft: 16 },
   exerciseName: { fontSize: 18, color: '#1E293B', fontWeight: '700', marginBottom: 4 },
-  exerciseDetail: { fontSize: 14, color: '#64748B', fontWeight: '500' },
+  exerciseDetail: { fontSize: 18, color: '#64748B', fontWeight: '500' },
   workoutStartButton: { borderRadius: 24, overflow: 'hidden', marginTop: 24 },
   gradientButton: { padding: 20, borderRadius: 24, alignItems: 'center', flexDirection: 'row', justifyContent: 'center', gap: 10 },
   workoutStartText: { color: '#FFFFFF', fontSize: 18, fontWeight: '900', letterSpacing: 0.5 },
@@ -1406,14 +1408,14 @@ const styles = StyleSheet.create({
   weightNumber: { fontSize: 48, fontWeight: '900', color: '#0EA5E9' },
   weightUnit: { fontSize: 20, color: '#64748B', marginLeft: 6, fontWeight: '600' },
   weightHistory: { flex: 1 },
-  weightLabel: { fontSize: 16, color: '#1E293B', fontWeight: '700', marginBottom: 4 },
-  weightSubtext: { fontSize: 14, color: '#64748B' },
+  weightLabel: { fontSize: 18, color: '#1E293B', fontWeight: '700', marginBottom: 4 },
+  weightSubtext: { fontSize: 18, color: '#64748B' },
   logoutButton: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
     marginHorizontal: 20, marginBottom: 24, padding: 20, borderRadius: 24,
     backgroundColor: '#FEF2F2', gap: 10, borderWidth: 1, borderColor: '#FEE2E2'
   },
-  logoutText: { fontSize: 18, color: '#DC2626', fontWeight: '800' },
+  logoutText: { fontSize: 18, color: '#B91C1C', fontWeight: '800' },
   weightBtn: {
     width: 52, height: 52, borderRadius: 26, backgroundColor: '#0EA5E9',
     justifyContent: 'center', alignItems: 'center',
@@ -1442,8 +1444,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center', alignItems: 'center', marginRight: 16
   },
   tipTextContainer: { flex: 1 },
-  tipTitle: { fontSize: 16, fontWeight: '800', marginBottom: 2 },
-  tipText: { fontSize: 15, lineHeight: 20 },
+  tipTitle: { fontSize: 18, fontWeight: '800', marginBottom: 2 },
+  tipText: { fontSize: 18, lineHeight: 24 },
   wellnessSection: {
     padding: 24, marginHorizontal: 20, marginBottom: 16, borderRadius: 24,
     borderWidth: 1,
@@ -1454,7 +1456,7 @@ const styles = StyleSheet.create({
   wellnessGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12, justifyContent: 'space-between' },
   wellnessItem: { flexGrow: 1, flexBasis: 90, padding: 12, borderRadius: 20, alignItems: 'center', gap: 4 },
   wellnessValue: { fontSize: 18, fontWeight: '900', marginTop: 4 },
-  wellnessLabel: { fontSize: 13, fontWeight: '700', textAlign: 'center' },
+  wellnessLabel: { fontSize: 18, fontWeight: '700', textAlign: 'center' },
   wellnessControls: { flexDirection: 'row', gap: 8, marginTop: 8 },
   miniBtn: {
     width: 32, height: 32, borderRadius: 16, backgroundColor: '#FFFFFF',
@@ -1476,13 +1478,13 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   healthInfoText: {
-    fontSize: 15,
+    fontSize: 18,
     fontWeight: '600',
-    lineHeight: 22,
+    lineHeight: 24,
   },
   motivationHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 },
-  motivationTitle: { fontSize: 16, fontWeight: '800', color: '#B45309' },
-  motivationText: { fontSize: 14, color: '#92400E', lineHeight: 20, fontWeight: '500' },
+  motivationTitle: { fontSize: 18, fontWeight: '800', color: '#B45309' },
+  motivationText: { fontSize: 18, color: '#92400E', lineHeight: 24, fontWeight: '500' },
   dailyChallengeCard: {
     marginHorizontal: 20, marginBottom: 16, borderRadius: 24,
     overflow: 'hidden', borderWidth: 1
@@ -1492,12 +1494,12 @@ const styles = StyleSheet.create({
   challengeIconCircle: { width: 48, height: 48, borderRadius: 24, justifyContent: 'center', alignItems: 'center', marginRight: 16 },
   challengeTextGroup: { flex: 1 },
   challengeTitle: { fontSize: 20, fontWeight: '900', marginBottom: 2 },
-  challengeDesc: { fontSize: 16, fontWeight: '600' },
+  challengeDesc: { fontSize: 18, fontWeight: '600' },
   completedBadge: { marginLeft: 12 },
   challengeProgressRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   challengeDots: { flexDirection: 'row', gap: 8 },
   challengeDot: { width: 40, height: 8, borderRadius: 4 },
-  challengeStatus: { fontSize: 16, fontWeight: '800' },
+  challengeStatus: { fontSize: 18, fontWeight: '800' },
   funSection: {
     paddingVertical: 24, marginBottom: 16, borderRadius: 24,
     marginHorizontal: 20,

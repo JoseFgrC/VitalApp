@@ -227,7 +227,7 @@ const styles = StyleSheet.create({
     loadingText: {
         marginTop: 10,
         color: '#FFFFFF',
-        fontSize: 14,
+        fontSize: 18,
     },
     errorContainer: {
         height: 220,
@@ -238,7 +238,7 @@ const styles = StyleSheet.create({
     },
     errorText: {
         color: '#FF3B30',
-        fontSize: 16,
+        fontSize: 18,
         marginBottom: 8,
     },
     openYoutubeBtn: {
@@ -253,6 +253,6 @@ const styles = StyleSheet.create({
     openYoutubeText: {
         color: '#FFFFFF',
         fontWeight: '700',
-        fontSize: 14,
+        fontSize: 18,
     },
 });

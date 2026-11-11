@@ -451,7 +451,7 @@ export default function DetalleEjercicioScreen() {
                             }}
                         >
                             <Ionicons name="open-outline" size={16} color={colors.textSecondary} />
-                            <Text style={{ color: colors.textSecondary, fontSize: 14, textDecorationLine: 'underline' }}>
+                            <Text style={{ color: colors.textSecondary, fontSize: 18, textDecorationLine: 'underline' }}>
                                 ¿Problemas con el video? Ábrelo en YouTube
                             </Text>
                         </TouchableOpacity>
@@ -608,7 +608,7 @@ export default function DetalleEjercicioScreen() {
                         style={{ marginTop: 15, alignItems: 'center', marginBottom: 20 }}
                         onPress={() => handleCompletar(true)}
                     >
-                        <Text style={{ color: colors.textSecondary, fontSize: 16, textDecorationLine: 'underline', fontWeight: '600' }}>
+                        <Text style={{ color: colors.textSecondary, fontSize: 18, textDecorationLine: 'underline', fontWeight: '600' }}>
                             Ya terminé (Saltar temporizador)
                         </Text>
                     </TouchableOpacity>
@@ -840,7 +840,7 @@ const styles = StyleSheet.create({
         color: '#1E293B',
     },
     botonEsfuerzoTexto: {
-        fontSize: 13,
+        fontSize: 18,
         fontWeight: '600',
         color: '#334155',
         textAlign: 'center',
@@ -929,7 +929,7 @@ const styles = StyleSheet.create({
     loadingText: {
         marginTop: 12,
         color: '#F8FAFC',
-        fontSize: 16,
+        fontSize: 18,
         fontWeight: '600',
     },
     heroSection: {
@@ -957,7 +957,7 @@ const styles = StyleSheet.create({
         gap: 8,
     },
     badgeText: {
-        fontSize: 16,
+        fontSize: 18,
         fontWeight: '700',
         color: '#2563EB',
     },
@@ -997,7 +997,7 @@ const styles = StyleSheet.create({
         marginBottom: 4,
     },
     metricLabel: {
-        fontSize: 14,
+        fontSize: 18,
         color: '#64748B',
         fontWeight: '600',
     },
@@ -1090,7 +1090,7 @@ const styles = StyleSheet.create({
         color: '#B45309',
     },
     warningText: {
-        fontSize: 17,
+        fontSize: 18,
         color: '#92400E',
         lineHeight: 26,
         fontWeight: '500',
@@ -1149,7 +1149,7 @@ const styles = StyleSheet.create({
         color: '#059669',
     },
     miniStatLabel: {
-        fontSize: 14,
+        fontSize: 18,
         color: '#64748B',
         fontWeight: '700',
     },

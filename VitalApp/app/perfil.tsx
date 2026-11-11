@@ -204,7 +204,7 @@ export default function PerfilScreen() {
 
     const handleSetupMfa = async () => {
         if (mfaEnabled) {
-            avisar("Aviso", "La seguridad de 2 pasos ya está activada.");
+            avisar("Aviso", "La verificación en dos pasos ya está activada.");
             return;
         }
         setMfaLoading(true);
@@ -246,7 +246,7 @@ export default function PerfilScreen() {
                 setMfaEnabled(true);
                 setMfaModalVisible(false);
                 setMfaTokenInput('');
-                avisar("¡Éxito!", "La seguridad de 2 pasos se activó correctamente.");
+                avisar("¡Listo!", "La verificación en dos pasos quedó activada.");
             } else {
                 avisar("Error", data.message || "Código incorrecto.");
             }
@@ -294,7 +294,7 @@ export default function PerfilScreen() {
                 if (Platform.OS === 'web') {
                     window.alert("La seguridad de 2 pasos ha sido desactivada.");
                 } else {
-                    avisar("MFA Desactivado", "La seguridad de 2 pasos ha sido desactivada.");
+                    avisar("Verificación desactivada", "La verificación en dos pasos quedó desactivada.");
                 }
                 console.log("MFA desactivado con éxito");
             } else {
@@ -412,12 +412,12 @@ export default function PerfilScreen() {
                         </View>
                         <View style={[styles.statDivider, { backgroundColor: colors.cardBorder }]} />
                         <View style={styles.statItem}>
-                            <Text style={[styles.statNumber, { color: '#D97706' }]}>{usuario.rachaDias}</Text>
+                            <Text style={[styles.statNumber, { color: colors.isDark ? '#FBBF24' : '#B45309' }]}>{usuario.rachaDias}</Text>
                             <Text style={[styles.statLabel, { color: colors.textSecondary }]}>Días (Racha)</Text>
                         </View>
                         <View style={[styles.statDivider, { backgroundColor: colors.cardBorder }]} />
                         <View style={styles.statItem}>
-                            <Text style={[styles.statNumber, { color: '#059669' }]}>{usuario.peso || '--'}</Text>
+                            <Text style={[styles.statNumber, { color: colors.isDark ? '#6EE7B7' : '#047857' }]}>{usuario.peso || '--'}</Text>
                             <Text style={[styles.statLabel, { color: colors.textSecondary }]}>Peso (kg)</Text>
                         </View>
                     </View>
@@ -445,7 +445,7 @@ export default function PerfilScreen() {
                     <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
                         <Text style={[styles.sectionTitle, { color: colors.text, marginBottom: 0 }]}>Mis Insignias</Text>
                         <TouchableOpacity onPress={() => router.push('/estadisticas')}>
-                            <Text style={{ color: '#2563EB', fontWeight: '700' }}>Ver todas</Text>
+                            <Text style={{ color: colors.isDark ? '#93C5FD' : '#1D4ED8', fontWeight: '700', fontSize: 18 }}>Ver todas</Text>
                         </TouchableOpacity>
                     </View>
                     <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginHorizontal: -5 }}>
@@ -520,7 +520,7 @@ export default function PerfilScreen() {
                             { backgroundColor: colors.inputDisabledBg, borderColor: colors.inputBorder, flexDirection: 'row', alignItems: 'center' }
                         ]}>
                             <Ionicons name="calendar-outline" size={18} color={colors.textSecondary} style={{ marginRight: 8 }} />
-                            <Text style={{ color: colors.textSecondary, fontSize: 16, fontWeight: '600' }}>
+                            <Text style={{ color: colors.textSecondary, fontSize: 18, fontWeight: '600' }}>
                                 {usuario.edad ? `${usuario.edad} años` : 'No disponible'}
                             </Text>
                         </View>
@@ -656,7 +656,7 @@ export default function PerfilScreen() {
                     activeOpacity={0.8}
                 >
                     <Ionicons name="log-out" size={24} color="#DC2626" />
-                    <Text style={styles.logoutButtonText}>Cerrar sesión</Text>
+                    <Text style={[styles.logoutButtonText, temaOscuro && { color: '#FCA5A5' }]}>Cerrar sesión</Text>
                 </TouchableOpacity>
 
             </ScrollView>
@@ -675,7 +675,7 @@ export default function PerfilScreen() {
                         </View>
                         
                         <Text style={{ fontSize: 22, fontWeight: '800', color: colors.text, marginBottom: 8, textAlign: 'center' }}>Activar Verificación</Text>
-                        <Text style={{ fontSize: 14, color: colors.textSecondary, textAlign: 'center', marginBottom: 20 }}>
+                        <Text style={{ fontSize: 18, color: colors.textSecondary, textAlign: 'center', marginBottom: 20 }}>
                             Abre la aplicación Google Authenticator y escanea el siguiente código QR:
                         </Text>
                         
@@ -689,8 +689,8 @@ export default function PerfilScreen() {
                             <ActivityIndicator size="large" color="#2563EB" style={{ marginVertical: 40 }} />
                         )}
                         
-                        <Text style={{ fontSize: 13, color: colors.textSecondary, marginBottom: 8 }}>¿No puedes escanear? Usa este código:</Text>
-                        <Text style={{ fontSize: 16, fontWeight: 'bold', color: '#2563EB', marginBottom: 20, letterSpacing: 2 }}>{mfaSecret}</Text>
+                        <Text style={{ fontSize: 18, color: colors.textSecondary, marginBottom: 8 }}>¿No puedes escanear? Usa este código:</Text>
+                        <Text style={{ fontSize: 18, fontWeight: 'bold', color: '#2563EB', marginBottom: 20, letterSpacing: 2 }}>{mfaSecret}</Text>
                         
                         <TextInput
                             style={{ borderWidth: 1, borderColor: '#CBD5E1', borderRadius: 12, width: '100%', padding: 16, fontSize: 20, textAlign: 'center', letterSpacing: 8, backgroundColor: colors.inputBg, color: colors.inputText, marginBottom: 20 }}
@@ -707,14 +707,14 @@ export default function PerfilScreen() {
                             onPress={handleVerifyMfa}
                             disabled={mfaLoading}
                         >
-                            {mfaLoading ? <ActivityIndicator color="#fff" /> : <Text style={{ color: '#fff', fontSize: 16, fontWeight: 'bold' }}>Verificar y Activar</Text>}
+                            {mfaLoading ? <ActivityIndicator color="#fff" /> : <Text style={{ color: '#fff', fontSize: 18, fontWeight: 'bold' }}>Verificar y Activar</Text>}
                         </TouchableOpacity>
                         
                         <TouchableOpacity
                             style={{ padding: 12 }}
                             onPress={() => setMfaModalVisible(false)}
                         >
-                            <Text style={{ color: colors.textSecondary, fontSize: 16, fontWeight: '600' }}>Cancelar</Text>
+                            <Text style={{ color: colors.textSecondary, fontSize: 18, fontWeight: '600' }}>Cancelar</Text>
                         </TouchableOpacity>
                     </View>
                 </View>
@@ -804,7 +804,7 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
     },
     editButtonText: {
-        fontSize: 16,
+        fontSize: 18,
         color: '#1E3A8A',
         fontWeight: '800',
         marginLeft: 8,
@@ -865,7 +865,7 @@ const styles = StyleSheet.create({
         marginBottom: 4,
     },
     avatarEmail: {
-        fontSize: 16,
+        fontSize: 18,
         color: '#DBEAFE',
         fontWeight: '500',
     },
@@ -909,7 +909,7 @@ const styles = StyleSheet.create({
         marginBottom: 4,
     },
     statLabel: {
-        fontSize: 14,
+        fontSize: 18,
         color: '#64748B',
         fontWeight: '600',
     },
@@ -951,7 +951,7 @@ const styles = StyleSheet.create({
         marginBottom: 20,
     },
     label: {
-        fontSize: 15,
+        fontSize: 18,
         fontWeight: '700',
         color: '#475569',
         marginBottom: 8,
@@ -1001,7 +1001,7 @@ const styles = StyleSheet.create({
         borderColor: '#FECACA',
     },
     logoutButtonText: {
-        color: '#DC2626',
+        color: '#B91C1C',
         fontSize: 18,
         fontWeight: '800',
         marginLeft: 12,
@@ -1025,7 +1025,7 @@ const styles = StyleSheet.create({
         fontSize: 28,
     },
     badgeLabel: {
-        fontSize: 12,
+        fontSize: 18,
         fontWeight: '700',
         textAlign: 'center',
     },

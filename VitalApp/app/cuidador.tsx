@@ -258,7 +258,7 @@ export default function CuidadorScreen() {
                             <Ionicons name="person-circle" size={44} color={a.estado === 'autorizado' ? '#2563EB' : colors.textSecondary} />
                             <View style={{ flex: 1 }}>
                                 <Text style={[styles.texto, { color: colors.text, fontWeight: '800' }]}>{a.nombre}</Text>
-                                <Text style={[styles.textoChico, { color: a.estado === 'autorizado' ? '#059669' : '#D97706' }]}>
+                                <Text style={[styles.textoChico, { color: a.estado === 'autorizado' ? (colors.isDark ? '#6EE7B7' : '#047857') : (colors.isDark ? '#FBBF24' : '#B45309') }]}>
                                     {a.estado === 'autorizado' ? 'Toca para ver su progreso' : 'Esperando su autorización'}
                                 </Text>
                             </View>
@@ -282,7 +282,7 @@ const styles = StyleSheet.create({
     tarjeta: { borderWidth: 1, borderRadius: 16, padding: 18, marginBottom: 14 },
     tarjetaTitulo: { fontSize: 21, fontWeight: '800', marginBottom: 8 },
     texto: { fontSize: 18, lineHeight: 26 },
-    textoChico: { fontSize: 16, lineHeight: 22, marginTop: 2 },
+    textoChico: { fontSize: 18, lineHeight: 24, marginTop: 2 },
     inputCodigo: {
         borderWidth: 2, borderRadius: 14, minHeight: 64, fontSize: 32, fontWeight: '800',
         textAlign: 'center', letterSpacing: 10, marginBottom: 12,
@@ -300,11 +300,11 @@ const styles = StyleSheet.create({
     filaResumen: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginBottom: 14 },
     dato: { flexBasis: '47%', flexGrow: 1, borderWidth: 1, borderRadius: 16, padding: 14, alignItems: 'center' },
     datoValor: { fontSize: 30, fontWeight: '800', marginTop: 4 },
-    datoTexto: { fontSize: 16, textAlign: 'center' },
+    datoTexto: { fontSize: 18, textAlign: 'center' },
     barras: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end', height: 140, marginTop: 8 },
     barraCol: { alignItems: 'center', flex: 1 },
-    barraNum: { fontSize: 16, fontWeight: '700', marginBottom: 4 },
+    barraNum: { fontSize: 18, fontWeight: '700', marginBottom: 4 },
     barra: { width: 26, borderRadius: 8 },
-    barraDia: { fontSize: 15, marginTop: 6 },
+    barraDia: { fontSize: 18, marginTop: 6 },
     sesion: { flexDirection: 'row', gap: 12, alignItems: 'center', paddingVertical: 12, borderBottomWidth: 1 },
 });

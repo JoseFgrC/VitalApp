@@ -337,11 +337,11 @@ export default function LoginScreen() {
             if (id_token) {
                 handleRealGoogleOAuth(id_token);
             } else {
-                avisar('Error SSO', `Google no devolvió el ID Token.\nCampos recibidos: ${Object.keys(response.params || {}).join(', ')}`);
+                avisar('No se pudo entrar con Google', 'Inténtalo de nuevo o entra con tu correo y contraseña.');
             }
         } else if (response?.type === 'error') {
             console.log('[Google SSO] Error response:', JSON.stringify(response));
-            avisar('Error SSO', 'No se pudo completar el inicio de sesión con Google.');
+            avisar('No se pudo entrar con Google', 'Inténtalo de nuevo o entra con tu correo y contraseña.');
         }
     }, [response]);
 
@@ -482,7 +482,7 @@ export default function LoginScreen() {
                 if (data.token) await AsyncStorage.setItem('jwtToken', data.token);
                 router.replace(await rutaInicial(u.rol || 'usuario'));
             } else {
-                avisar('Error SSO', data.message || 'No se pudo iniciar sesión con Google.');
+                avisar('No se pudo entrar con Google', data.message || 'Inténtalo de nuevo o entra con tu correo y contraseña.');
             }
         } catch (e: any) {
             avisar('Error de conexión', e.message);
@@ -554,7 +554,7 @@ export default function LoginScreen() {
 
                         {requiresMfa ? (
                             <>
-                                <Lab text="Código de Autenticación (MFA)" />
+                                <Lab text="Código de 6 números de tu app de verificación" />
                                 <Inp icon="key-outline" ph="123456" val={mfaToken} set={setMfaToken} kb="numeric" />
                                 
                                 <TouchableOpacity
@@ -718,7 +718,7 @@ const CARD_MAX = 440;
 
 const st = StyleSheet.create({
     avisoSesion: { flexDirection: 'row', alignItems: 'center', gap: 8, padding: 12, borderRadius: 12, marginBottom: 12, backgroundColor: 'rgba(252, 211, 77, 0.12)', borderWidth: 1, borderColor: 'rgba(252, 211, 77, 0.4)' },
-    avisoSesionTxt: { flex: 1, color: '#FDE68A', fontSize: 15, fontWeight: '600', lineHeight: 20 },
+    avisoSesionTxt: { flex: 1, color: '#FDE68A', fontSize: 18, fontWeight: '600', lineHeight: 24 },
     root: {
         flex: 1,
         backgroundColor: '#03071E',
@@ -782,7 +782,7 @@ const st = StyleSheet.create({
         marginBottom: 4
     },
     slogan: {
-        fontSize: isWeb ? 16 : 18,
+        fontSize: isWeb ? 18 : 18,
         color: 'rgba(255,255,255,0.50)',
         fontWeight: '400'
     },
@@ -816,12 +816,12 @@ const st = StyleSheet.create({
         marginBottom: 4
     },
     cardSub: {
-        fontSize: isWeb ? 15 : 16,
+        fontSize: isWeb ? 18 : 18,
         color: 'rgba(180,200,255,0.55)',
         marginBottom: 20
     },
     label: {
-        fontSize: isWeb ? 14 : 15,
+        fontSize: isWeb ? 18 : 18,
         fontWeight: '600',
         color: 'rgba(160,190,255,0.65)',
         marginBottom: 7,
@@ -846,7 +846,7 @@ const st = StyleSheet.create({
     },
     input: {
         flex: 1,
-        fontSize: isWeb ? 16 : 18,
+        fontSize: isWeb ? 18 : 18,
         color: '#FFFFFF',
         fontWeight: '500',
         height: '100%'
@@ -874,7 +874,7 @@ const st = StyleSheet.create({
         backgroundColor: 'rgba(59,130,246,0.25)'
     },
     pillTxt: {
-        fontSize: isWeb ? 13 : 14,
+        fontSize: isWeb ? 18 : 18,
         fontWeight: '600',
         color: 'rgba(160,190,255,0.50)'
     },
@@ -919,12 +919,12 @@ const st = StyleSheet.create({
         paddingVertical: 2
     },
     switchTxt: {
-        fontSize: isWeb ? 15 : 16,
+        fontSize: isWeb ? 18 : 18,
         color: 'rgba(160,190,255,0.50)',
         fontWeight: '500'
     },
     switchBold: {
-        fontSize: isWeb ? 15 : 16,
+        fontSize: isWeb ? 18 : 18,
         color: '#60A5FA',
         fontWeight: '800',
         ...(isWeb ? { cursor: 'pointer' as any } : {})
@@ -959,7 +959,7 @@ const st = StyleSheet.create({
         }),
     },
     btnOAuthTxt: {
-        fontSize: isWeb ? 16 : 18,
+        fontSize: isWeb ? 18 : 18,
         fontWeight: '700',
         color: '#333333'
     }

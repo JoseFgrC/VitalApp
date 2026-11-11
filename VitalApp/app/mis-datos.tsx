@@ -188,7 +188,7 @@ export default function MisDatosScreen() {
                                 {invitacion ? (
                                     <View style={[styles.cajaCodigo, { borderColor: '#2563EB' }]}>
                                         <Text style={[styles.texto, { color: colors.text }]}>Dale este código a tu cuidador:</Text>
-                                        <Text style={styles.codigo}>{invitacion.codigo.slice(0, 3)} {invitacion.codigo.slice(3)}</Text>
+                                        <Text style={[styles.codigo, colors.isDark && { color: '#93C5FD' }]}>{invitacion.codigo.slice(0, 3)} {invitacion.codigo.slice(3)}</Text>
                                         <Text style={[styles.textoChico, { color: colors.textSecondary }]}>
                                             Sirve hasta el {new Date(invitacion.codigo_expira).toLocaleString('es-MX', { dateStyle: 'medium', timeStyle: 'short' })}
                                         </Text>
@@ -231,7 +231,7 @@ export default function MisDatosScreen() {
                             </View>
 
                             <View style={[...tarjeta, { borderColor: '#FCA5A5' }]}>
-                                <Text style={[styles.tarjetaTitulo, { color: '#B91C1C' }]}>Eliminar mi cuenta</Text>
+                                <Text style={[styles.tarjetaTitulo, { color: colors.isDark ? '#FCA5A5' : '#B91C1C' }]}>Eliminar mi cuenta</Text>
                                 <Text style={[styles.texto, { color: colors.textSecondary, marginBottom: 12 }]}>
                                     Se borrará todo: perfil, valoraciones, ejercicios y cuidadores. Escribe ELIMINAR para confirmar.
                                 </Text>
@@ -263,7 +263,7 @@ const styles = StyleSheet.create({
     tarjeta: { borderWidth: 1, borderRadius: 16, padding: 18, marginBottom: 14 },
     tarjetaTitulo: { fontSize: 22, fontWeight: '800', marginBottom: 6 },
     texto: { fontSize: 18, lineHeight: 26 },
-    textoChico: { fontSize: 16, lineHeight: 22 },
+    textoChico: { fontSize: 18, lineHeight: 24 },
     boton: {
         flexDirection: 'row', gap: 10, borderRadius: 14, minHeight: 58,
         justifyContent: 'center', alignItems: 'center', paddingHorizontal: 12,

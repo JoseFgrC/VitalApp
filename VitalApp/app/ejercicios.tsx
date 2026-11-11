@@ -469,7 +469,7 @@ const styles = StyleSheet.create({
     },
     countText: {
         color: '#FFFFFF',
-        fontSize: 14,
+        fontSize: 18,
         fontWeight: '700',
     },
     headerSubtitle: {
@@ -539,7 +539,7 @@ const styles = StyleSheet.create({
         marginBottom: 8,
     },
     emptySubtext: {
-        fontSize: 16,
+        fontSize: 18,
         color: '#64748B',
     },
     conditionBanner: {
@@ -553,9 +553,9 @@ const styles = StyleSheet.create({
     },
     conditionBannerText: {
         color: '#FFFFFF',
-        fontSize: 14,
+        fontSize: 18,
         fontWeight: '600',
-        lineHeight: 20,
+        lineHeight: 24,
     },
     warningBanner: {
         flexDirection: 'row',
@@ -595,7 +595,7 @@ const styles = StyleSheet.create({
     },
     recommendToggleText: {
         color: '#2563EB',
-        fontSize: 13,
+        fontSize: 18,
         fontWeight: '700',
     },
     tarjetaEjercicio: { 
@@ -674,7 +674,7 @@ const styles = StyleSheet.create({
     },
     durationBadgeText: {
         color: '#FFFFFF',
-        fontSize: 16,
+        fontSize: 18,
         fontWeight: '700',
     },
     categoryBadge: {
@@ -691,7 +691,7 @@ const styles = StyleSheet.create({
     },
     categoryBadgeText: {
         color: '#FFFFFF',
-        fontSize: 16,
+        fontSize: 18,
         fontWeight: '700',
     },
     cardContent: {
@@ -800,7 +800,7 @@ const styles = StyleSheet.create({
         }),
     },
     categoryChipText: {
-        fontSize: 16,
+        fontSize: 18,
         fontWeight: '700',
         color: '#DBEAFE',
     },

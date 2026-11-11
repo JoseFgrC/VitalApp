@@ -250,7 +250,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
   },
   conditionText: {
-    fontSize: 14,
+    fontSize: 18,
     fontWeight: '700',
     color: '#334155',
   },
@@ -262,13 +262,13 @@ const styles = StyleSheet.create({
     marginBottom: 24,
   },
   infoTitle: {
-    fontSize: 16,
+    fontSize: 18,
     fontWeight: '800',
     marginBottom: 8,
   },
   infoText: {
-    fontSize: 15,
-    lineHeight: 22,
+    fontSize: 18,
+    lineHeight: 24,
     fontWeight: '500',
   },
   saveButton: {
