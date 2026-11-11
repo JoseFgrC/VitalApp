@@ -23,12 +23,22 @@ const PREGUNTAS = [
 
 const NIVELES: Record<number, { nombre: string; descripcion: string; color: string }> = {
     0: { nombre: 'Consulta médica', descripcion: 'Por ahora no te mostraremos rutinas. Consulta a tu médico y repite la valoración cuando te autorice.', color: '#DC2626' },
-    1: { nombre: 'Nivel 1 · Suave', descripcion: 'Ejercicios sentados o con apoyo, de muy baja intensidad.', color: '#D97706' },
+    1: { nombre: 'Nivel 1 · Suave', descripcion: 'Ejercicios sentados o con apoyo, de muy baja intensidad.', color: '#B45309' },
     2: { nombre: 'Nivel 2 · Moderado', descripcion: 'Ejercicios de pie con apoyo cercano y movimientos controlados.', color: '#2563EB' },
     3: { nombre: 'Nivel 3 · Activo', descripcion: 'Ejercicios de fuerza, equilibrio y resistencia moderada.', color: '#059669' },
 };
 
 type Respuestas = Record<string, boolean | undefined>;
+
+// Variante clara del color de cada nivel para el tema oscuro (contraste ≥ 4.5:1)
+const COLOR_NIVEL_OSCURO: Record<number, string> = { 0: '#FCA5A5', 1: '#FBBF24', 2: '#93C5FD', 3: '#6EE7B7' };
+
+// Explicación sencilla del resultado (sin términos técnicos)
+function mensajeResultado(nivel: number | null, conPrueba: boolean): string {
+    if (nivel === 0) return 'Por tus respuestas, consulta a tu médico antes de hacer ejercicio. Cuando te autorice, vuelve a responder las preguntas.';
+    if (conPrueba) return 'Calculamos tu nivel con tus respuestas y con tu prueba de equilibrio.';
+    return 'Calculamos tu nivel con tus respuestas. Si un profesional te hace una prueba de equilibrio, podremos ajustarlo.';
+}
 
 export default function ValoracionScreen() {
     const router = useRouter();
@@ -73,11 +83,11 @@ export default function ValoracionScreen() {
         if (conBerg) {
             const puntaje = Number(puntajeBerg);
             if (!Number.isInteger(puntaje) || puntaje < 0 || puntaje > 56) {
-                avisar('Puntuación inválida', 'La Escala de Berg va de 0 a 56.');
+                avisar('Puntaje no válido', 'El puntaje de la prueba de equilibrio va de 0 a 56.');
                 return;
             }
             if (aplicador.trim().length < 3) {
-                avisar('Falta el aplicador', 'Escribe el nombre de quien aplicó la Escala de Berg.');
+                avisar('Falta un dato', 'Escribe el nombre de quien te hizo la prueba de equilibrio.');
                 return;
             }
             if (fechaBerg && !/^\d{4}-\d{2}-\d{2}$/.test(fechaBerg)) {
@@ -105,9 +115,10 @@ export default function ValoracionScreen() {
                 data = await resB.json();
             }
             if (data.success) {
-                setResultado({ nivel: data.nivel, mensaje: data.message });
+                setResultado({ nivel: data.nivel, mensaje: mensajeResultado(data.nivel, conBerg) });
             } else {
-                avisar('No se pudo guardar', data.message || 'Inténtalo de nuevo.');
+                // Los mensajes del servidor usan términos técnicos; se muestra uno sencillo
+                avisar('No se pudo guardar', 'Revisa tus respuestas e inténtalo de nuevo.');
             }
         } catch (e: any) {
             avisar('Error de conexión', e.message);
@@ -133,7 +144,7 @@ export default function ValoracionScreen() {
                     <View style={styles.webContainer}>
                         <Text style={[styles.titulo, { color: colors.text }]}>Tu nivel funcional</Text>
                         <View style={[styles.tarjetaNivel, { borderColor: info.color, backgroundColor: colors.card }]}>
-                            <Text style={[styles.nivelNombre, { color: info.color }]}>{info.nombre}</Text>
+                            <Text style={[styles.nivelNombre, { color: colors.isDark ? COLOR_NIVEL_OSCURO[resultado.nivel] : info.color }]}>{info.nombre}</Text>
                             <Text style={[styles.textoGrande, { color: colors.text }]}>{info.descripcion}</Text>
                             <Text style={[styles.textoNormal, { color: colors.textSecondary, marginTop: 12 }]}>{resultado.mensaje}</Text>
                         </View>
@@ -196,13 +207,15 @@ export default function ValoracionScreen() {
                     >
                         <Ionicons name={conBerg ? 'checkbox' : 'square-outline'} size={34} color={conBerg ? '#2563EB' : colors.textSecondary} />
                         <Text style={[styles.textoGrande, { color: colors.text, flex: 1 }]}>
-                            Un profesional o cuidador capacitado me aplicó la Escala de Berg
+                            Un profesional me hizo una prueba de equilibrio
                         </Text>
                     </TouchableOpacity>
 
                     {conBerg && (
                         <View style={[styles.tarjeta, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}>
-                            <Text style={[styles.etiqueta, { color: colors.text }]}>Puntuación total (0 a 56)</Text>
+                            <Text style={[styles.etiqueta, { color: colors.text }]}>Puntaje total de la prueba</Text>
+                            {/* Ayuda para el profesional que captura el dato (RD03): única mención del nombre técnico */}
+                            <Text style={[styles.textoNormal, { color: colors.textSecondary, marginTop: -4 }]}>Escala de Berg, de 0 a 56</Text>
                             <TextInput
                                 style={[styles.input, { backgroundColor: colors.inputBg, borderColor: colors.inputBorder, color: colors.inputText }]}
                                 value={puntajeBerg}
@@ -212,7 +225,7 @@ export default function ValoracionScreen() {
                                 placeholder="Ej. 42"
                                 placeholderTextColor={colors.textSecondary}
                             />
-                            <Text style={[styles.etiqueta, { color: colors.text }]}>¿Quién la aplicó?</Text>
+                            <Text style={[styles.etiqueta, { color: colors.text }]}>¿Quién te hizo la prueba?</Text>
                             <TextInput
                                 style={[styles.input, { backgroundColor: colors.inputBg, borderColor: colors.inputBorder, color: colors.inputText }]}
                                 value={aplicador}
@@ -220,7 +233,7 @@ export default function ValoracionScreen() {
                                 placeholder="Nombre del fisioterapeuta o cuidador"
                                 placeholderTextColor={colors.textSecondary}
                             />
-                            <Text style={[styles.etiqueta, { color: colors.text }]}>Fecha de aplicación (opcional)</Text>
+                            <Text style={[styles.etiqueta, { color: colors.text }]}>Fecha de la prueba (opcional)</Text>
                             <TextInput
                                 style={[styles.input, { backgroundColor: colors.inputBg, borderColor: colors.inputBorder, color: colors.inputText }]}
                                 value={fechaBerg}
@@ -229,7 +242,7 @@ export default function ValoracionScreen() {
                                 placeholderTextColor={colors.textSecondary}
                             />
                             <Text style={[styles.textoNormal, { color: colors.textSecondary }]}>
-                                No intentes hacer la Escala de Berg tú solo: incluye pruebas de equilibrio que deben hacerse con supervisión.
+                                No intentes hacer esta prueba tú solo: incluye ejercicios de equilibrio que deben hacerse con supervisión.
                             </Text>
                         </View>
                     )}
@@ -258,7 +271,7 @@ const styles = StyleSheet.create({
     subtitulo: { fontSize: 19, textAlign: 'center', marginTop: 8, marginBottom: 20, lineHeight: 27 },
     tarjeta: { borderWidth: 1, borderRadius: 16, padding: 18, marginBottom: 14 },
     textoGrande: { fontSize: 20, lineHeight: 28, fontWeight: '600' },
-    textoNormal: { fontSize: 17, lineHeight: 25 },
+    textoNormal: { fontSize: 18, lineHeight: 25 },
     filaBotones: { flexDirection: 'row', gap: 12, marginTop: 14 },
     botonRespuesta: {
         flex: 1, minHeight: 60, borderRadius: 14, borderWidth: 2,

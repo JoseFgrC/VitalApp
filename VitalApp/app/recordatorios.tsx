@@ -387,7 +387,7 @@ const styles = StyleSheet.create({
         backgroundColor: '#FFFFFF', width: 40, height: 40, borderRadius: 20,
         justifyContent: 'center', alignItems: 'center',
     },
-    headerSubtitle: { fontSize: 16, color: '#DBEAFE', fontWeight: '500' },
+    headerSubtitle: { fontSize: 18, color: '#DBEAFE', fontWeight: '500' },
     globalCard: {
         backgroundColor: '#FFFFFF', margin: 20, padding: 20, borderRadius: 24,
         flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
@@ -412,13 +412,13 @@ const styles = StyleSheet.create({
         width: 52, height: 52, borderRadius: 26, justifyContent: 'center', alignItems: 'center',
     },
     globalTitle: { fontSize: 18, fontWeight: '800', color: '#1E293B' },
-    globalSubtitle: { fontSize: 14, color: '#64748B', marginTop: 2, flexShrink: 1 },
+    globalSubtitle: { fontSize: 18, color: '#64748B', marginTop: 2, flexShrink: 1 },
     sectionTitle: { fontSize: 20, fontWeight: '800', color: '#1E293B', marginHorizontal: 20, marginBottom: 16 },
     emptyState: {
         alignItems: 'center', paddingVertical: 60,
     },
     emptyText: { fontSize: 20, fontWeight: '700', color: '#94A3B8', marginTop: 16 },
-    emptySubtext: { fontSize: 16, color: '#CBD5E1', marginTop: 4 },
+    emptySubtext: { fontSize: 18, color: '#CBD5E1', marginTop: 4 },
     reminderCard: {
         backgroundColor: '#FFFFFF', marginHorizontal: 20, marginBottom: 16, padding: 20, borderRadius: 24,
         ...Platform.select({
@@ -441,7 +441,7 @@ const styles = StyleSheet.create({
     reminderTop: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8, rowGap: 4 },
     reminderTimeContainer: { flexDirection: 'row', alignItems: 'center', gap: 10 },
     reminderTime: { fontSize: 28, fontWeight: '900', color: '#1E293B' },
-    reminderLabel: { fontSize: 16, color: '#64748B', fontWeight: '600', marginBottom: 12 },
+    reminderLabel: { fontSize: 18, color: '#64748B', fontWeight: '600', marginBottom: 12 },
     reminderActions: { flexDirection: 'row', alignItems: 'center', gap: 8 },
     deleteBtn: { padding: 8 },
     textInactive: { color: '#94A3B8' },
@@ -451,17 +451,17 @@ const styles = StyleSheet.create({
         justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: '#E2E8F0',
     },
     diaBadgeActive: { backgroundColor: '#2563EB', borderColor: '#2563EB' },
-    diaBadgeInactive: { backgroundColor: '#94A3B8', borderColor: '#94A3B8' },
-    diaText: { fontSize: 13, color: '#94A3B8', fontWeight: '700' },
+    diaBadgeInactive: { backgroundColor: '#64748B', borderColor: '#64748B' },
+    diaText: { fontSize: 18, color: '#475569', fontWeight: '700' },
     diaTextActive: { color: '#FFFFFF' },
-    diaTextInactive: { color: '#E2E8F0' },
+    diaTextInactive: { color: '#FFFFFF' },
     motivationCard: {
         backgroundColor: '#FFFBEB', margin: 20, padding: 24, borderRadius: 24,
         borderWidth: 1, borderColor: '#FEF3C7',
     },
     motivationHeader: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 12 },
     motivationTitle: { fontSize: 18, fontWeight: '800', color: '#B45309' },
-    motivationText: { fontSize: 16, color: '#92400E', lineHeight: 24, fontWeight: '500' },
+    motivationText: { fontSize: 18, color: '#92400E', lineHeight: 24, fontWeight: '500' },
     bottomSpace: { height: 30 },
     // Modal styles
     modalOverlay: {
@@ -475,7 +475,7 @@ const styles = StyleSheet.create({
         flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24,
     },
     modalTitle: { fontSize: 24, fontWeight: '900', color: '#1E293B' },
-    modalLabel: { fontSize: 16, fontWeight: '700', color: '#475569', marginBottom: 8, marginTop: 16 },
+    modalLabel: { fontSize: 18, fontWeight: '700', color: '#475569', marginBottom: 8, marginTop: 16 },
     modalInput: {
         borderWidth: 1, borderColor: '#CBD5E1', borderRadius: 16,
         paddingHorizontal: 20, paddingVertical: 16, fontSize: 18,
@@ -487,7 +487,7 @@ const styles = StyleSheet.create({
         justifyContent: 'center', alignItems: 'center', borderWidth: 2, borderColor: '#E2E8F0',
     },
     modalDiaBadgeActive: { backgroundColor: '#2563EB', borderColor: '#2563EB' },
-    modalDiaText: { fontSize: 14, color: '#94A3B8', fontWeight: '800' },
+    modalDiaText: { fontSize: 18, color: '#94A3B8', fontWeight: '800' },
     modalDiaTextActive: { color: '#FFFFFF' },
     modalSaveBtn: { marginTop: 28, borderRadius: 24, overflow: 'hidden' },
     modalSaveBtnGradient: {

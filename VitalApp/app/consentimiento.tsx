@@ -19,7 +19,7 @@ const SECCIONES_AVISO = [
     },
     {
         titulo: '¿Qué datos usamos?',
-        texto: 'Tu nombre, correo, fecha de nacimiento, peso y estatura. También datos de salud: tus respuestas al cuestionario de valoración, la puntuación de la Escala de Berg, tu nivel funcional y el registro de tus sesiones de ejercicio.',
+        texto: 'Tu nombre, correo, fecha de nacimiento, peso y estatura. También datos de salud: tus respuestas a las preguntas de salud, el resultado de tu prueba de equilibrio, tu nivel de ejercicio y el registro de tus sesiones.',
     },
     {
         titulo: '¿Para qué los usamos?',

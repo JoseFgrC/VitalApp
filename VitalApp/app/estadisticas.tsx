@@ -24,9 +24,12 @@ import Svg, { Circle, Text as SvgText } from 'react-native-svg';
 const { width } = Dimensions.get('window');
 
 // --- Componente de gráfica de pastel (donut) dinámica ---
-function DonutChart({ size = 120, strokeWidth = 12, percentage = 0, color = '#2563EB', label = '', value = '' }: {
-    size?: number; strokeWidth?: number; percentage?: number; color?: string; label?: string; value?: string;
+function DonutChart({ size = 120, strokeWidth = 12, percentage = 0, color = '#2563EB', label = '', value = '', oscuro = false }: {
+    size?: number; strokeWidth?: number; percentage?: number; color?: string; label?: string; value?: string; oscuro?: boolean;
 }) {
+    // Colores del texto según el tema (contraste ≥ 4.5:1 sobre la tarjeta)
+    const colorNumero = oscuro ? '#F1F5F9' : '#1E293B';
+    const colorEtiqueta = oscuro ? '#CBD5E1' : '#475569';
     const radius = (size - strokeWidth) / 2;
     const circumference = 2 * Math.PI * radius;
     const strokeDashoffset = circumference - (circumference * Math.min(percentage, 100)) / 100;
@@ -35,7 +38,7 @@ function DonutChart({ size = 120, strokeWidth = 12, percentage = 0, color = '#25
     return (
         <View style={{ alignItems: 'center' }}>
             <Svg width={size} height={size}>
-                <Circle cx={center} cy={center} r={radius} stroke="#F1F5F9" strokeWidth={strokeWidth} fill="none" />
+                <Circle cx={center} cy={center} r={radius} stroke={oscuro ? '#334155' : '#F1F5F9'} strokeWidth={strokeWidth} fill="none" />
                 <Circle
                     cx={center} cy={center} r={radius}
                     stroke={color} strokeWidth={strokeWidth} fill="none"
@@ -44,10 +47,10 @@ function DonutChart({ size = 120, strokeWidth = 12, percentage = 0, color = '#25
                     strokeLinecap="round"
                     rotation="-90" origin={`${center}, ${center}`}
                 />
-                <SvgText x={center} y={center - 6} textAnchor="middle" fontSize={size * 0.22} fontWeight="900" fill="#1E293B">
+                <SvgText x={center} y={center - 6} textAnchor="middle" fontSize={size * 0.22} fontWeight="900" fill={colorNumero}>
                     {value}
                 </SvgText>
-                <SvgText x={center} y={center + 14} textAnchor="middle" fontSize={size * 0.11} fontWeight="600" fill="#94A3B8">
+                <SvgText x={center} y={center + 14} textAnchor="middle" fontSize={Math.max(18, size * 0.11)} fontWeight="600" fill={colorEtiqueta}>
                     {label}
                 </SvgText>
             </Svg>
@@ -70,6 +73,8 @@ export default function EstadisticasScreen() {
         progresoSemanal: [0, 0, 0, 0, 0, 0, 0],
         esfuerzoPromedio: null as number | null,
         detenidas: 0,
+        // Meta de días por semana: los días de sus recordatorios activos, o 5 si no tiene
+        metaDias: 5,
         logros: [
             { id: 1, nombre: 'Primer paso', icono: '🌟', desbloqueado: false, condicion: 1, tipo: 'ejercicios' },
             { id: 2, nombre: '5 días seguidos', icono: '🔥', desbloqueado: false, condicion: 5, tipo: 'racha' },
@@ -143,6 +148,21 @@ export default function EstadisticasScreen() {
                 console.log('Sin conexión, mostrando progreso guardado en el teléfono:', error);
             }
 
+            // Meta de días: los días distintos de sus recordatorios activos (RF13); si no tiene, 5
+            // (la OMS recomienda actividad física la mayoría de los días de la semana)
+            let metaDias = 5;
+            try {
+                const resRec = await fetchSeguro(`${API_URL}/recordatorios`);
+                const dataRec = await resRec.json();
+                if (dataRec.success) {
+                    const dias = new Set<string>();
+                    (dataRec.recordatorios || []).filter((r: any) => r.activo).forEach((r: any) => r.dias.forEach((d: string) => dias.add(d)));
+                    if (dias.size > 0) metaDias = dias.size;
+                }
+            } catch (error) {
+                console.log('No se pudieron leer los recordatorios para la meta:', error);
+            }
+
             // Meta: totalGoal es la meta semanal, weeklyGoal es lo logrado
             const metaTotal = stats ? (stats.totalGoal || 3) : 3;
             const hydrationStr = await AsyncStorage.getItem('userHydration');
@@ -171,6 +191,7 @@ export default function EstadisticasScreen() {
                 progresoSemanal,
                 esfuerzoPromedio,
                 detenidas,
+                metaDias,
                 logros: logrosActualizados
             });
 
@@ -225,6 +246,9 @@ export default function EstadisticasScreen() {
         );
     }
 
+    // Días distintos de esta semana con al menos un ejercicio completado
+    const diasConEjercicio = (estadisticas.progresoSemanal || []).filter((n: number) => n > 0).length;
+
     return (
         <SafeAreaView style={[styles.safeArea, { backgroundColor: colors.bg }]}>
             <StatusBar barStyle={colors.statusBarStyle} backgroundColor={colors.gradientStart} />
@@ -242,7 +266,7 @@ export default function EstadisticasScreen() {
                         <TouchableOpacity onPress={() => router.push('/home')} style={{marginRight: 16}}>
                             <Ionicons name="arrow-back" size={28} color="#FFFFFF" />
                         </TouchableOpacity>
-                        <Text style={[styles.headerTitle, {marginBottom: 0}]}>Mi Progreso</Text>
+                        <Text style={[styles.headerTitle, {marginBottom: 0}]}>Mi progreso</Text>
                     </View>
                     <Text style={styles.headerSubtitle}>Sigue avanzando cada día, estás haciendo un gran trabajo.</Text>
                     
@@ -268,6 +292,55 @@ export default function EstadisticasScreen() {
                         ))}
                     </View>
                 </LinearGradient>
+
+                {/* Resumen en frases con números grandes (accesibilidad para adultos mayores) */}
+                <View style={[styles.resumen, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}>
+                    <Text style={[styles.resumenTitulo, { color: colors.text }]}>Tu resumen</Text>
+                    {[
+                        {
+                            icono: 'calendar',
+                            color: '#1D4ED8',
+                            numero: `${diasConEjercicio} de ${estadisticas.metaDias}`,
+                            frase: `Esta semana hiciste ejercicio ${diasConEjercicio} de ${estadisticas.metaDias} días.`,
+                            extra: diasConEjercicio >= estadisticas.metaDias ? '¡Cumpliste tu meta de la semana!' : diasConEjercicio > 0 ? `Te faltan ${estadisticas.metaDias - diasConEjercicio} ${estadisticas.metaDias - diasConEjercicio === 1 ? 'día' : 'días'} para tu meta.` : 'Hoy es un buen día para empezar.',
+                        },
+                        {
+                            icono: 'flame',
+                            color: '#B45309',
+                            numero: `${estadisticas.racha}`,
+                            frase: estadisticas.racha === 1 ? 'Llevas 1 día seguido haciendo ejercicio.' : `Llevas ${estadisticas.racha} días seguidos haciendo ejercicio.`,
+                        },
+                        {
+                            icono: 'time',
+                            color: '#047857',
+                            numero: `${estadisticas.minutos}`,
+                            frase: `En total llevas ${estadisticas.minutos} ${estadisticas.minutos === 1 ? 'minuto' : 'minutos'} de ejercicio.`,
+                        },
+                        {
+                            icono: 'checkmark-done',
+                            color: '#6D28D9',
+                            numero: `${estadisticas.completados}`,
+                            frase: `Has completado ${estadisticas.completados} ${estadisticas.completados === 1 ? 'ejercicio' : 'ejercicios'}.`,
+                        },
+                        ...(estadisticas.esfuerzoPromedio !== null ? [{
+                            icono: 'happy',
+                            color: '#0E7490',
+                            numero: comoTeSientes(estadisticas.esfuerzoPromedio).palabra,
+                            frase: `En promedio, los ejercicios te han parecido ${comoTeSientes(estadisticas.esfuerzoPromedio).frase}.`,
+                        }] : []),
+                    ].map((item, i) => (
+                        <View key={i} style={[styles.resumenFila, { borderTopColor: colors.cardBorder }, i === 0 && { borderTopWidth: 0 }]}>
+                            <View style={[styles.resumenIcono, { backgroundColor: item.color + '1A' }]}>
+                                <Ionicons name={item.icono as any} size={30} color={item.color} />
+                            </View>
+                            <View style={{ flex: 1 }}>
+                                <Text style={[styles.resumenNumero, { color: colors.isDark ? '#FFFFFF' : item.color }]}>{item.numero}</Text>
+                                <Text style={[styles.resumenFrase, { color: colors.text }]}>{item.frase}</Text>
+                                {item.extra ? <Text style={[styles.resumenFrase, { color: colors.textSecondary }]}>{item.extra}</Text> : null}
+                            </View>
+                        </View>
+                    ))}
+                </View>
 
                 {/* Tarjeta de Progreso General */}
                 <View style={[styles.progressCard, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}>
@@ -304,48 +377,52 @@ export default function EstadisticasScreen() {
                     <View style={styles.donutRow}>
                         <View style={styles.donutItem}>
                             <DonutChart
+                                oscuro={colors.isDark}
                                 size={110} strokeWidth={10}
                                 percentage={Math.min(estadisticas.racha * 10, 100)}
                                 color="#F59E0B" value={`${estadisticas.racha}`} label="días"
                             />
                             <View style={[styles.donutLabel, { backgroundColor: '#FEF3C7' }]}>
                                 <Ionicons name="flame" size={14} color="#D97706" />
-                                <Text style={[styles.donutLabelText, { color: '#D97706' }]}>Racha</Text>
+                                <Text style={[styles.donutLabelText, { color: '#92400E' }]}>Racha</Text>
                             </View>
                         </View>
                         <View style={styles.donutItem}>
                             <DonutChart
+                                oscuro={colors.isDark}
                                 size={110} strokeWidth={10}
                                 percentage={Math.min(estadisticas.puntos / 5, 100)}
                                 color="#2563EB" value={`${estadisticas.puntos}`} label="pts"
                             />
                             <View style={[styles.donutLabel, { backgroundColor: '#EFF6FF' }]}>
                                 <Ionicons name="star" size={14} color="#2563EB" />
-                                <Text style={[styles.donutLabelText, { color: '#2563EB' }]}>Puntos</Text>
+                                <Text style={[styles.donutLabelText, { color: '#1E40AF' }]}>Puntos</Text>
                             </View>
                         </View>
                     </View>
                     <View style={styles.donutRow}>
                         <View style={styles.donutItem}>
                             <DonutChart
+                                oscuro={colors.isDark}
                                 size={110} strokeWidth={10}
                                 percentage={Math.min(estadisticas.calorias / 3, 100)}
-                                color="#EF4444" value={`${estadisticas.calorias}`} label="kcal"
+                                color="#EF4444" value={`${estadisticas.calorias}`} label="calorías"
                             />
                             <View style={[styles.donutLabel, { backgroundColor: '#FEE2E2' }]}>
                                 <Ionicons name="fitness" size={14} color="#DC2626" />
-                                <Text style={[styles.donutLabelText, { color: '#DC2626' }]}>Calorías</Text>
+                                <Text style={[styles.donutLabelText, { color: '#991B1B' }]}>Calorías</Text>
                             </View>
                         </View>
                         <View style={styles.donutItem}>
                             <DonutChart
+                                oscuro={colors.isDark}
                                 size={110} strokeWidth={10}
                                 percentage={Math.min(estadisticas.minutos / 0.6, 100)}
                                 color="#10B981" value={`${estadisticas.minutos}`} label="min"
                             />
                             <View style={[styles.donutLabel, { backgroundColor: '#F0FDF4' }]}>
                                 <Ionicons name="time" size={14} color="#16A34A" />
-                                <Text style={[styles.donutLabelText, { color: '#16A34A' }]}>Minutos</Text>
+                                <Text style={[styles.donutLabelText, { color: '#166534' }]}>Minutos</Text>
                             </View>
                         </View>
                     </View>
@@ -380,7 +457,7 @@ export default function EstadisticasScreen() {
                     {estadisticas.progresoSemanal.every(v => v === 0) ? (
                         <View style={{ alignItems: 'center', paddingVertical: 40 }}>
                             <Ionicons name="analytics-outline" size={48} color="#CBD5E1" />
-                            <Text style={{ color: '#94A3B8', fontSize: 16, marginTop: 12, fontWeight: '600' }}>
+                            <Text style={{ color: colors.textSecondary, fontSize: 18, marginTop: 12, fontWeight: '600' }}>
                                 Completa ejercicios para ver tu gráfico
                             </Text>
                         </View>
@@ -455,7 +532,22 @@ export default function EstadisticasScreen() {
     );
 }
 
+// Esfuerzo percibido (0–10) en palabras sencillas
+function comoTeSientes(promedio: number) {
+    if (promedio <= 2) return { palabra: 'Muy ligero', frase: 'muy ligeros' };
+    if (promedio <= 4) return { palabra: 'Ligero', frase: 'ligeros' };
+    if (promedio <= 6) return { palabra: 'Moderado', frase: 'moderados' };
+    if (promedio <= 8) return { palabra: 'Fuerte', frase: 'fuertes' };
+    return { palabra: 'Muy fuerte', frase: 'muy fuertes' };
+}
+
 const styles = StyleSheet.create({
+    resumen: { marginHorizontal: 20, marginTop: 16, marginBottom: 8, padding: 20, borderRadius: 24, borderWidth: 2 },
+    resumenTitulo: { fontSize: 26, fontWeight: '900', marginBottom: 8 },
+    resumenFila: { flexDirection: 'row', alignItems: 'center', gap: 16, paddingVertical: 14, borderTopWidth: 1 },
+    resumenIcono: { width: 56, height: 56, borderRadius: 28, alignItems: 'center', justifyContent: 'center' },
+    resumenNumero: { fontSize: 34, fontWeight: '900', lineHeight: 40 },
+    resumenFrase: { fontSize: 19, lineHeight: 26 },
     safeArea: { flex: 1, backgroundColor: '#F8FAFC' },
     container: { flex: 1 },
     scrollContent: { paddingBottom: 100 },
@@ -500,7 +592,7 @@ const styles = StyleSheet.create({
             }
         })
     },
-    periodText: { fontSize: 16, color: '#DBEAFE', fontWeight: '600' },
+    periodText: { fontSize: 18, color: '#DBEAFE', fontWeight: '600' },
     periodTextActive: { color: '#1E3A8A', fontWeight: '800' },
     progressCard: {
         backgroundColor: '#FFFFFF', marginHorizontal: 20, marginBottom: 20, padding: 24, borderRadius: 24,
@@ -522,14 +614,14 @@ const styles = StyleSheet.create({
     },
     progressHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
     progressTitle: { fontSize: 22, fontWeight: '900', color: '#1E293B', marginBottom: 4 },
-    progressSubtitle: { fontSize: 16, color: '#64748B', fontWeight: '500' },
+    progressSubtitle: { fontSize: 18, color: '#64748B', fontWeight: '500' },
     percentageCircle: { backgroundColor: '#EFF6FF', paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20 },
     percentageText: { fontSize: 18, fontWeight: '800', color: '#2563EB' },
     progressBarContainer: { height: 16, backgroundColor: '#F1F5F9', borderRadius: 8, overflow: 'hidden', marginBottom: 16 },
     progressBar: { height: '100%', borderRadius: 8 },
     progressFooter: { flexDirection: 'row', alignItems: 'baseline' },
   progressTextDark: { fontSize: 24, fontWeight: '900', color: '#1E293B' },
-  progressTextLight: { fontSize: 16, color: '#64748B', fontWeight: '600' },
+  progressTextLight: { fontSize: 18, color: '#64748B', fontWeight: '600' },
   visualIndicator: { width: 60, height: 60, borderRadius: 30, backgroundColor: '#FEF2F2', justifyContent: 'center', alignItems: 'center', position: 'relative' },
   pulseContainer: { position: 'absolute', width: '100%', height: '100%', borderRadius: 30, borderWidth: 2, borderColor: '#EF4444', opacity: 0.3 },
   pulse: { width: '100%', height: '100%', borderRadius: 30, backgroundColor: '#EF4444', opacity: 0.1 },
@@ -554,7 +646,7 @@ const styles = StyleSheet.create({
     },
     statIconWrapper: { width: 64, height: 64, borderRadius: 32, justifyContent: 'center', alignItems: 'center', marginBottom: 16 },
     statNumber: { fontSize: 36, fontWeight: '900', color: '#1E293B', marginBottom: 4 },
-    statLabel: { fontSize: 15, color: '#64748B', fontWeight: '600', textAlign: 'center' },
+    statLabel: { fontSize: 18, color: '#64748B', fontWeight: '600', textAlign: 'center' },
     chartCard: { 
         backgroundColor: '#FFFFFF', marginHorizontal: 20, marginBottom: 20, padding: 24, borderRadius: 24,
         ...Platform.select({
@@ -577,15 +669,15 @@ const styles = StyleSheet.create({
     chartTitle: { fontSize: 22, fontWeight: '900', color: '#1E293B' },
     barsContainer: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end', paddingHorizontal: 8 },
     barWrapper: { alignItems: 'center' },
-    barValue: { fontSize: 16, color: '#1E293B', marginBottom: 8, fontWeight: '800' },
+    barValue: { fontSize: 18, color: '#1E293B', marginBottom: 8, fontWeight: '800' },
     barOuterContainer: { height: 140, justifyContent: 'flex-end', marginBottom: 12, width: 32, backgroundColor: '#F8FAFC', borderRadius: 16 },
     bar: { width: '100%', borderRadius: 16 },
-    barLabel: { fontSize: 15, color: '#94A3B8', fontWeight: '700' },
+    barLabel: { fontSize: 18, color: '#94A3B8', fontWeight: '700' },
     barLabelActive: { color: '#1E293B' },
     donutRow: { flexDirection: 'row', justifyContent: 'space-around', marginBottom: 20 },
     donutItem: { alignItems: 'center' },
     donutLabel: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12, marginTop: 8, gap: 4 },
-    donutLabelText: { fontSize: 13, fontWeight: '700' },
+    donutLabelText: { fontSize: 18, fontWeight: '700' },
     achievementsCard: { 
         backgroundColor: '#FFFFFF', marginHorizontal: 20, marginBottom: 24, padding: 24, borderRadius: 24,
         ...Platform.select({
@@ -607,7 +699,7 @@ const styles = StyleSheet.create({
     achievementsHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 20, gap: 12 },
     achievementsTitle: { fontSize: 22, fontWeight: '900', color: '#1E293B', flex: 1 },
     achievementCount: { backgroundColor: '#FEF3C7', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 16 },
-    achievementCountText: { fontSize: 14, fontWeight: '800', color: '#D97706' },
+    achievementCountText: { fontSize: 18, fontWeight: '800', color: '#92400E' },
     achievementsGrid: { flexDirection: 'column' },
     achievementItem: { 
         backgroundColor: '#F8FAFC', padding: 16, borderRadius: 20, flexDirection: 'row', alignItems: 'center', marginBottom: 12,
@@ -620,5 +712,5 @@ const styles = StyleSheet.create({
     achievementInfo: { flex: 1 },
     achievementName: { fontSize: 18, fontWeight: '800', color: '#1E293B', marginBottom: 4 },
     achievementNameLocked: { color: '#64748B' },
-    achievementStatus: { fontSize: 14, color: '#64748B', fontWeight: '500' },
+    achievementStatus: { fontSize: 18, color: '#64748B', fontWeight: '500' },
 });

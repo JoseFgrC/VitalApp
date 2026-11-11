@@ -6,6 +6,11 @@
 //   API=http://localhost:3999 node pruebas-api/flujo-completo.mjs
 import crypto from 'node:crypto';
 import { readFileSync } from 'node:fs';
+import { createRequire } from 'node:module';
+
+// Misma librería que usa el backend para generar los códigos de la app autenticadora
+const speakeasy = createRequire(import.meta.url)('speakeasy');
+const codigoMfa = (secreto) => speakeasy.totp({ secret: secreto, encoding: 'base32' });
 
 const BASE = (process.env.API || 'http://localhost:3000') + '/api';
 const envFile = readFileSync(new URL('../.env', import.meta.url), 'utf8');
@@ -47,6 +52,7 @@ async function crearCuenta(c, nombre, rol) {
     await c.call('POST', '/register', { nombre, email, password_hash: 'Clave123!', fecha_nacimiento: '1950-05-10', peso: 70, rol });
     const r = await c.call('POST', '/login', { email, password_hash: 'Clave123!' });
     c.token = r.data.token;
+    c.email = email;
     return r.data.user;
 }
 
@@ -140,6 +146,47 @@ try {
     ok(r.data.estado === 'revocado', 'el adulto revoca el acceso');
     r = await cuidador.call('GET', `/cuidador/adultos/${ua.id_usuario}/progreso`);
     ok(r.status === 403, 'RN05: después de revocar el cuidador ya no ve nada');
+
+    // ── RD07: verificación en dos pasos (MFA) sin toma de cuentas ajenas ─────
+    // Antes /api/mfa/* era pública y confiaba en el userId del cuerpo: cualquiera podía
+    // configurar el MFA de otra cuenta y entrar sin contraseña.
+    const anonimo = cliente();
+    r = await anonimo.call('POST', '/mfa/setup', { userId: ua.id_usuario });
+    ok(r.status === 401, `MFA: sin sesión no se puede configurar (status ${r.status})`);
+    r = await anonimo.call('POST', '/mfa/disable', { userId: ua.id_usuario });
+    ok(r.status === 401, `MFA: sin sesión no se puede desactivar (status ${r.status})`);
+    r = await anonimo.call('POST', '/mfa/verify-login', { userId: ua.id_usuario, token: '000000' });
+    ok(r.status === 401, `MFA: verify-login ya no acepta un userId sin token temporal (status ${r.status})`);
+
+    r = await intruso.call('POST', '/mfa/setup', { userId: ua.id_usuario });
+    const secretoIntruso = r.data.secret;
+    r = await intruso.call('POST', '/mfa/enable', { userId: ua.id_usuario, token: codigoMfa(secretoIntruso) });
+    r = await anonimo.call('POST', '/login', { email: adulto.email, password_hash: 'Clave123!' });
+    ok(r.data.success && !r.data.requiresMfa && r.data.token, 'MFA: el userId del cuerpo se ignora; el intruso solo cambió su propia cuenta');
+    await intruso.call('POST', '/mfa/disable', {});
+
+    r = await adulto.call('POST', '/mfa/setup', {});
+    const secreto = r.data.secret;
+    ok(r.data.success && !!secreto, 'MFA: el adulto configura su verificación en dos pasos');
+    r = await adulto.call('POST', '/mfa/enable', { token: codigoMfa(secreto) });
+    ok(r.data.success, 'MFA: se activa con un código válido');
+    r = await anonimo.call('POST', '/login', { email: adulto.email, password_hash: 'Clave123!' });
+    ok(r.data.requiresMfa && !r.data.token && !r.data.userId && !!r.data.mfaToken, 'MFA: tras la contraseña solo se entrega un token temporal');
+    const temporal = r.data.mfaToken;
+    const conTemporal = cliente(); conTemporal.token = temporal;
+    r = await conTemporal.call('GET', '/progreso');
+    ok(r.status === 403 || r.status === 401, `MFA: el token temporal no sirve como sesión (status ${r.status})`);
+    r = await anonimo.call('POST', '/mfa/verify-login', { mfaToken: temporal, token: '000000' });
+    ok(!r.data.success && !r.data.token, 'MFA: un código incorrecto no da acceso');
+    r = await anonimo.call('POST', '/mfa/verify-login', { mfaToken: temporal, token: codigoMfa(secreto) });
+    ok(r.data.success && !!r.data.token, 'MFA: con contraseña + código correcto se obtiene la sesión');
+    r = await anonimo.call('POST', '/login', { email: adulto.email, password_hash: 'Clave123!' });
+    const temporal2 = r.data.mfaToken;
+    for (let i = 0; i < 5; i++) await anonimo.call('POST', '/mfa/verify-login', { mfaToken: temporal2, token: '000000' });
+    r = await anonimo.call('POST', '/mfa/verify-login', { mfaToken: temporal2, token: codigoMfa(secreto) });
+    ok(r.status === 429, `MFA: tras 5 códigos fallidos se bloquea temporalmente (status ${r.status})`);
+    r = await adulto.call('POST', '/mfa/disable', {});
+    ok(r.data.success, 'MFA: el dueño de la cuenta puede desactivarla con su sesión');
 
     // ── RN05 / RD07: rutas antiguas con datos de salud eliminadas (IDOR) ──────
     // Antes cualquier sesión podía leer o escribir la evolución y los reportes de otro usuario.

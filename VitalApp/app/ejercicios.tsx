@@ -18,6 +18,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { API_URL } from '../constants/config';
 import { fetchSeguro } from '../utils/api';
+import { textoIntensidad, colorIntensidad, textoDuracion } from '../utils/textos';
 import { evaluarEjercicio, cargarCondiciones as cargarCondicionesUsuario } from '../utils/condiciones';
 import MenuInferior from '../components/MenuInferior';
 import { useTheme } from '../hooks/useTheme';
@@ -175,16 +176,10 @@ export default function EjerciciosScreen() {
     // Mismas reglas que Inicio (utils/condiciones.ts)
     const getExerciseAdvice = (ejercicio: Ejercicio) => evaluarEjercicio(ejercicio.categoria, userConditions).aviso;
 
+    // Colores con contraste ≥ 4.5:1 (utils/textos.ts)
     const getDificultadColor = (dificultad: string) => {
-        switch ((dificultad || '').toLowerCase()) {
-            case 'baja': return { bg: '#F0FDF4', text: '#16A34A' };
-            case 'media': return { bg: '#FEF9C3', text: '#CA8A04' };
-            case 'alta': return { bg: '#FEF2F2', text: '#DC2626' };
-            case 'moderado': return { bg: '#FEF9C3', text: '#CA8A04' };
-            case 'normal': return { bg: '#EFF6FF', text: '#2563EB' };
-            case 'fácil': return { bg: '#F0FDF4', text: '#16A34A' };
-            default: return { bg: '#F1F5F9', text: '#64748B' };
-        }
+        const c = colorIntensidad(dificultad, colors.isDark);
+        return { bg: c.fondo, text: c.texto };
     };
 
     const visibleEjercicios = showOnlyRecommended
@@ -227,7 +222,7 @@ export default function EjerciciosScreen() {
                 </View>
                 <View style={styles.conditionBanner}>
                     <Text style={styles.conditionBannerText} numberOfLines={2}>
-                        {userConditions.length > 0 ? `Condiciones registradas: ${conditionSummary}` : 'Marca tus condiciones en Enfermedades para ver recomendaciones y ejercicios no recomendados.'}
+                        {userConditions.length > 0 ? `Condiciones registradas: ${conditionSummary}` : 'Marca tus condiciones en «Mi salud» para ver recomendaciones y ejercicios no recomendados.'}
                     </Text>
                 </View>
                 
@@ -346,7 +341,7 @@ export default function EjerciciosScreen() {
                                         <View style={styles.durationBadge}>
                                             <Ionicons name="time-outline" size={12} color="#FFFFFF" />
                                             <Text style={styles.durationBadgeText}>
-                                                {Math.floor(ejercicio.duracion / 60)} min
+                                                {Math.round(ejercicio.duracion / 60)} minutos
                                             </Text>
                                         </View>
                                         {/* Category badge */}
@@ -376,41 +371,32 @@ export default function EjerciciosScreen() {
                                     </View>
                                     
                                     {getExerciseAdvice(ejercicio) ? (
-                                        <View style={[styles.warningBanner, { backgroundColor: '#FEE2E2', borderColor: '#FECACA' }]}> 
-                                            <Ionicons name="warning-outline" size={16} color="#B91C1C" />
-                                            <Text style={styles.warningText}>{getExerciseAdvice(ejercicio)}</Text>
-                                        </View>
-                                    ) : null}
-
-                                    {getExerciseAdvice(ejercicio) ? (
-                                        <View style={[styles.warningBanner, { backgroundColor: '#FEE2E2', borderColor: '#FECACA', marginTop: 12, marginHorizontal: 0 }]}> 
-                                            <Ionicons name="warning-outline" size={16} color="#B91C1C" />
+                                        <View style={[styles.warningBanner, { backgroundColor: '#FEE2E2', borderColor: '#FECACA', marginTop: 12, marginHorizontal: 0 }]}>
+                                            <Ionicons name="warning-outline" size={24} color="#991B1B" />
                                             <Text style={styles.warningText}>{getExerciseAdvice(ejercicio)}</Text>
                                         </View>
                                     ) : null}
 
                                     <View style={[styles.divider, { backgroundColor: colors.cardBorder }]} />
 
+                                    {/* Duración e intensidad escritas, y un botón grande para abrir el ejercicio */}
                                     <View style={styles.ejercicioFooter}>
-                                        {/* Tiempo */}
-                                        <View style={[styles.footerBadge, { backgroundColor: colors.bg }]}>
-                                            <Ionicons name="time-outline" size={16} color={colors.textSecondary} />
-                                            <Text style={[styles.footerText, { color: colors.textSecondary }]}>
-                                                {Math.floor(ejercicio.duracion / 60)} min
+                                        <View style={[styles.footerBadge, { backgroundColor: colors.isDark ? '#334155' : '#F1F5F9' }]}>
+                                            <Ionicons name="time-outline" size={24} color={colors.text} />
+                                            <Text style={[styles.footerText, { color: colors.text }]}>
+                                                {textoDuracion(ejercicio.duracion)}
                                             </Text>
                                         </View>
-                                        {/* Dificultad */}
                                         <View style={[styles.footerBadge, { backgroundColor: getDificultadColor(ejercicio.dificultad).bg }]}>
-                                            <Ionicons name="bar-chart-outline" size={16} color={getDificultadColor(ejercicio.dificultad).text} />
+                                            <Ionicons name="bar-chart-outline" size={24} color={getDificultadColor(ejercicio.dificultad).text} />
                                             <Text style={[styles.dificultad, { color: getDificultadColor(ejercicio.dificultad).text }]}>
-                                                {ejercicio.dificultad}
+                                                {textoIntensidad(ejercicio.dificultad)}
                                             </Text>
                                         </View>
-                                        {/* Ver video */}
-                                        <View style={styles.verVideoBadge}>
-                                            <Ionicons name="play-circle" size={16} color="#FFFFFF" />
-                                            <Text style={styles.verVideoText}>Ver video</Text>
-                                        </View>
+                                    </View>
+                                    <View style={styles.verVideoBadge}>
+                                        <Ionicons name="play-circle" size={30} color="#FFFFFF" />
+                                        <Text style={styles.verVideoText}>Ver ejercicio</Text>
                                     </View>
                                 </View>
                             </TouchableOpacity>
@@ -483,7 +469,7 @@ const styles = StyleSheet.create({
     },
     countText: {
         color: '#FFFFFF',
-        fontSize: 14,
+        fontSize: 18,
         fontWeight: '700',
     },
     headerSubtitle: {
@@ -553,7 +539,7 @@ const styles = StyleSheet.create({
         marginBottom: 8,
     },
     emptySubtext: {
-        fontSize: 16,
+        fontSize: 18,
         color: '#64748B',
     },
     conditionBanner: {
@@ -567,9 +553,9 @@ const styles = StyleSheet.create({
     },
     conditionBannerText: {
         color: '#FFFFFF',
-        fontSize: 14,
+        fontSize: 18,
         fontWeight: '600',
-        lineHeight: 20,
+        lineHeight: 24,
     },
     warningBanner: {
         flexDirection: 'row',
@@ -582,10 +568,11 @@ const styles = StyleSheet.create({
         marginBottom: 14,
     },
     warningText: {
-        color: '#991B1B',
-        fontSize: 13,
-        fontWeight: '700',
         flex: 1,
+        fontSize: 18,
+        lineHeight: 25,
+        color: '#991B1B',
+        fontWeight: '700',
     },
     recommendToggleRow: {
         flexDirection: 'row',
@@ -608,7 +595,7 @@ const styles = StyleSheet.create({
     },
     recommendToggleText: {
         color: '#2563EB',
-        fontSize: 13,
+        fontSize: 18,
         fontWeight: '700',
     },
     tarjetaEjercicio: { 
@@ -687,7 +674,7 @@ const styles = StyleSheet.create({
     },
     durationBadgeText: {
         color: '#FFFFFF',
-        fontSize: 12,
+        fontSize: 18,
         fontWeight: '700',
     },
     categoryBadge: {
@@ -704,7 +691,7 @@ const styles = StyleSheet.create({
     },
     categoryBadgeText: {
         color: '#FFFFFF',
-        fontSize: 12,
+        fontSize: 18,
         fontWeight: '700',
     },
     cardContent: {
@@ -713,16 +700,17 @@ const styles = StyleSheet.create({
     verVideoBadge: {
         flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: '#2563EB',
-        paddingHorizontal: 14,
-        paddingVertical: 8,
-        borderRadius: 12,
-        gap: 6,
+        justifyContent: 'center',
+        gap: 10,
+        minHeight: 60,
+        marginTop: 16,
+        borderRadius: 16,
+        backgroundColor: '#1D4ED8',
     },
     verVideoText: {
         color: '#FFFFFF',
-        fontSize: 13,
-        fontWeight: '700',
+        fontSize: 20,
+        fontWeight: '800',
     },
     tarjetaHeader: {
         flexDirection: 'row',
@@ -740,15 +728,14 @@ const styles = StyleSheet.create({
         flex: 1,
     },
     ejercicioNombre: {
-        fontSize: 20,
+        fontSize: 22,
         fontWeight: '800',
-        color: '#1E293B',
         marginBottom: 6,
+        lineHeight: 28,
     },
     ejercicioDescripcion: {
-        fontSize: 15,
-        color: '#64748B',
-        lineHeight: 22,
+        fontSize: 18,
+        lineHeight: 26,
     },
     divider: {
         height: 1,
@@ -757,26 +744,24 @@ const styles = StyleSheet.create({
     },
     ejercicioFooter: {
         flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
+        flexWrap: 'wrap',
+        gap: 10,
     },
     footerBadge: {
         flexDirection: 'row',
         alignItems: 'center',
-        paddingHorizontal: 12,
-        paddingVertical: 6,
-        borderRadius: 12,
-        backgroundColor: '#F8FAFC',
-        gap: 6,
+        gap: 8,
+        paddingHorizontal: 14,
+        paddingVertical: 10,
+        borderRadius: 14,
     },
     footerText: {
-        fontSize: 14,
-        color: '#475569',
-        fontWeight: '600',
+        fontSize: 18,
+        fontWeight: '700',
     },
     dificultad: {
-        fontSize: 14,
-        fontWeight: '700',
+        fontSize: 18,
+        fontWeight: '800',
     },
     categoryScroll: {
         marginTop: 10,
@@ -815,7 +800,7 @@ const styles = StyleSheet.create({
         }),
     },
     categoryChipText: {
-        fontSize: 16,
+        fontSize: 18,
         fontWeight: '700',
         color: '#DBEAFE',
     },
