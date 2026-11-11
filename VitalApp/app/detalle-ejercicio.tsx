@@ -25,6 +25,7 @@ import { getVideoIdForExercise } from '../constants/exercises';
 import { API_URL } from '../constants/config';
 import { fetchSeguro } from '../utils/api';
 import { avisar } from '../utils/dialogos';
+import { textoIntensidad, colorIntensidad } from '../utils/textos';
 
 // Señales de alarma para detener el ejercicio (Capítulo 2, ejercicio terapéutico multicomponente)
 const SENALES_ALARMA = [
@@ -467,9 +468,9 @@ export default function DetalleEjercicioScreen() {
                             <Ionicons name="time" size={20} color={colors.isDark ? '#60A5FA' : '#2563EB'} />
                             <Text style={[styles.badgeText, { color: colors.isDark ? '#60A5FA' : '#2563EB' }]}>{Math.floor(ejercicio.duracion / 60)} min</Text>
                         </View>
-                        <View style={[styles.badge, { backgroundColor: colors.isDark ? '#064E3B' : '#F0FDF4' }]}>
-                            <Ionicons name="bar-chart" size={20} color={colors.isDark ? '#34D399' : '#16A34A'} />
-                            <Text style={[styles.badgeText, { color: colors.isDark ? '#34D399' : '#16A34A' }]}>{ejercicio.dificultad}</Text>
+                        <View style={[styles.badge, { backgroundColor: colorIntensidad(ejercicio.dificultad, colors.isDark).fondo }]}>
+                            <Ionicons name="bar-chart" size={20} color={colorIntensidad(ejercicio.dificultad, colors.isDark).texto} />
+                            <Text style={[styles.badgeText, { color: colorIntensidad(ejercicio.dificultad, colors.isDark).texto }]}>{textoIntensidad(ejercicio.dificultad)}</Text>
                         </View>
                     </View>
                 </View>

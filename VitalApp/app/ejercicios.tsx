@@ -18,6 +18,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { API_URL } from '../constants/config';
 import { fetchSeguro } from '../utils/api';
+import { textoIntensidad, colorIntensidad } from '../utils/textos';
 import { evaluarEjercicio, cargarCondiciones as cargarCondicionesUsuario } from '../utils/condiciones';
 import MenuInferior from '../components/MenuInferior';
 import { useTheme } from '../hooks/useTheme';
@@ -175,16 +176,10 @@ export default function EjerciciosScreen() {
     // Mismas reglas que Inicio (utils/condiciones.ts)
     const getExerciseAdvice = (ejercicio: Ejercicio) => evaluarEjercicio(ejercicio.categoria, userConditions).aviso;
 
+    // Colores con contraste ≥ 4.5:1 (utils/textos.ts)
     const getDificultadColor = (dificultad: string) => {
-        switch ((dificultad || '').toLowerCase()) {
-            case 'baja': return { bg: '#F0FDF4', text: '#16A34A' };
-            case 'media': return { bg: '#FEF9C3', text: '#CA8A04' };
-            case 'alta': return { bg: '#FEF2F2', text: '#DC2626' };
-            case 'moderado': return { bg: '#FEF9C3', text: '#CA8A04' };
-            case 'normal': return { bg: '#EFF6FF', text: '#2563EB' };
-            case 'fácil': return { bg: '#F0FDF4', text: '#16A34A' };
-            default: return { bg: '#F1F5F9', text: '#64748B' };
-        }
+        const c = colorIntensidad(dificultad, colors.isDark);
+        return { bg: c.fondo, text: c.texto };
     };
 
     const visibleEjercicios = showOnlyRecommended
@@ -403,7 +398,7 @@ export default function EjerciciosScreen() {
                                         <View style={[styles.footerBadge, { backgroundColor: getDificultadColor(ejercicio.dificultad).bg }]}>
                                             <Ionicons name="bar-chart-outline" size={16} color={getDificultadColor(ejercicio.dificultad).text} />
                                             <Text style={[styles.dificultad, { color: getDificultadColor(ejercicio.dificultad).text }]}>
-                                                {ejercicio.dificultad}
+                                                {textoIntensidad(ejercicio.dificultad)}
                                             </Text>
                                         </View>
                                         {/* Ver video */}

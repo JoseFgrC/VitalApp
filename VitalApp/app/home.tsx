@@ -15,6 +15,7 @@ import { fetchSeguro } from '../utils/api';
 
 
 import { avisar } from '../utils/dialogos';
+import { textoIntensidad, colorIntensidad } from '../utils/textos';
 import { evaluarEjercicio, cargarCondiciones } from '../utils/condiciones';
 
 type Recomendado = {
@@ -845,8 +846,8 @@ export default function HomeScreen() {
                       <Ionicons name="time-outline" size={16} color={colors.textSecondary} />
                       <Text style={[styles.cardTime, { color: colors.textSecondary }]}>{workout.time}</Text>
                     </View>
-                    <View style={[styles.intensityBadge, { backgroundColor: workout.color + '15' }]}>
-                      <Text style={[styles.cardIntensity, { color: workout.color }]}>{workout.intensity}</Text>
+                    <View style={[styles.intensityBadge, { backgroundColor: colorIntensidad(workout.intensity, colors.isDark).fondo }]}>
+                      <Text style={[styles.cardIntensity, { color: colorIntensidad(workout.intensity, colors.isDark).texto }]}>{textoIntensidad(workout.intensity)}</Text>
                     </View>
                   </View>
                 </View>
@@ -1249,7 +1250,7 @@ const styles = StyleSheet.create({
   cardTimeBadge: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   cardTime: { fontSize: 14, color: '#64748B', fontWeight: '600' },
   intensityBadge: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 12 },
-  cardIntensity: { fontSize: 12, fontWeight: '800', textTransform: 'uppercase' },
+  cardIntensity: { fontSize: 16, fontWeight: '800' },
   todayWorkout: {
     backgroundColor: '#FFFFFF', padding: 24, marginHorizontal: 20, marginBottom: 16, borderRadius: 24,
     ...Platform.select({
