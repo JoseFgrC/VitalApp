@@ -13,7 +13,7 @@ interface VideoPlayerProps {
 }
 
 // ---------- Web: iframe nativo de YouTube ----------
-function VideoPlayerWeb({ videoId, onReady, onEnd, onProgress }: VideoPlayerProps) {
+function VideoPlayerWeb({ videoId, playing = true, onReady, onEnd, onProgress }: VideoPlayerProps) {
     const cleanId = getCleanId(videoId);
     const [error, setError] = useState(false);
     const iframeRef = useRef<any>(null);
@@ -23,6 +23,16 @@ function VideoPlayerWeb({ videoId, onReady, onEnd, onProgress }: VideoPlayerProp
         const t = setTimeout(() => { if (onReady) onReady(); }, 800);
         return () => clearTimeout(t);
     }, []);
+
+    // Pausa / Continuar desde el botón propio de la app (YouTube IFrame API)
+    useEffect(() => {
+        try {
+            iframeRef.current?.contentWindow?.postMessage(
+                JSON.stringify({ event: 'command', func: playing ? 'playVideo' : 'pauseVideo', args: [] }),
+                '*'
+            );
+        } catch (_) {}
+    }, [playing]);
 
     // Rastrear progreso vía postMessage de la YouTube IFrame API
     useEffect(() => {

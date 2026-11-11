@@ -27,3 +27,10 @@ export function colorIntensidad(valor: string | null | undefined, oscuro = false
     const c = COLORES_INTENSIDAD[normalizarIntensidad(valor)];
     return oscuro ? c.oscuro : c.claro;
 }
+
+// "Dura 5 minutos" a partir de segundos
+export function textoDuracion(segundos: number): string {
+    const minutos = Math.round((Number(segundos) || 0) / 60);
+    if (minutos < 1) return 'Dura menos de 1 minuto';
+    return `Dura ${minutos} ${minutos === 1 ? 'minuto' : 'minutos'}`;
+}

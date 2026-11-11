@@ -117,6 +117,12 @@ export default function DetalleEjercicioScreen() {
     const [modalVisible, setModalVisible] = useState(false);
     const [cargando, setCargando] = useState(true);
     const [segundosVistos, setSegundosVistos] = useState(0);
+    // Pausa propia de la app: detiene el video y el contador de tiempo
+    const [pausado, setPausado] = useState(false);
+    const alternarPausa = () => {
+        if (!pausado) Speech.stop();
+        setPausado(p => !p);
+    };
     // Seguridad: aviso previo obligatorio, botón de paro y esfuerzo percibido al terminar
     // En una rutina el aviso y el calentamiento solo se muestran en el primer ejercicio
     const [seguridadAceptada, setSeguridadAceptada] = useState(!!params.index && params.index !== '0');
@@ -344,13 +350,13 @@ export default function DetalleEjercicioScreen() {
     // Soporte para seguimiento de tiempo en Web o sin video
     useEffect(() => {
         let interval: any;
-        if ((Platform.OS === 'web' || !videoId) && !cargando && seguridadAceptada && !detenido) {
+        if ((Platform.OS === 'web' || !videoId) && !cargando && seguridadAceptada && !detenido && !pausado) {
             interval = setInterval(() => {
                 setSegundosVistos(prev => prev + 1);
             }, 1000);
         }
         return () => clearInterval(interval);
-    }, [cargando, videoId, seguridadAceptada, detenido]);
+    }, [cargando, videoId, seguridadAceptada, detenido, pausado]);
 
     useEffect(() => {
         if (!videoId) setCargando(false);
@@ -418,6 +424,7 @@ export default function DetalleEjercicioScreen() {
                             <View style={styles.videoContainer}>
                                 <VideoPlayer 
                                     videoId={videoId} 
+                                    playing={!pausado}
                                     onEnd={() => { if (!completado) handleCompletar(false); }} 
                                     onProgress={(segundos) => setSegundosVistos(segundos)}
                                     onReady={() => setCargando(false)}
@@ -614,14 +621,31 @@ export default function DetalleEjercicioScreen() {
             {/* Botón de paro: siempre visible mientras el ejercicio está en curso */}
             {seguridadAceptada && !detenido && !completado && (
                 <View style={[styles.barraDetener, { backgroundColor: colors.bg, borderTopColor: colors.cardBorder }]}>
-                    <TouchableOpacity
-                        style={styles.botonDetener}
-                        onPress={detenerEjercicio}
-                        accessibilityLabel="Detener el ejercicio"
-                    >
-                        <Ionicons name="stop-circle" size={34} color="#FFFFFF" />
-                        <Text style={styles.botonDetenerTexto}>DETENER</Text>
-                    </TouchableOpacity>
+                    {pausado && (
+                        <Text style={[styles.textoPausa, { color: colors.text }]} accessibilityLiveRegion="polite">
+                            En pausa. Descansa y toca «Continuar» cuando estés listo.
+                        </Text>
+                    )}
+                    <View style={styles.filaBotonesControl}>
+                        <TouchableOpacity
+                            style={[styles.botonPausa, pausado && styles.botonContinuar]}
+                            onPress={alternarPausa}
+                            accessibilityRole="button"
+                            accessibilityLabel={pausado ? 'Continuar el ejercicio' : 'Pausar el ejercicio'}
+                        >
+                            <Ionicons name={pausado ? 'play-circle' : 'pause-circle'} size={34} color="#FFFFFF" />
+                            <Text style={styles.botonDetenerTexto}>{pausado ? 'Continuar' : 'Pausa'}</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                            style={[styles.botonDetener, { flex: 1, width: 'auto' }]}
+                            onPress={detenerEjercicio}
+                            accessibilityRole="button"
+                            accessibilityLabel="Detener el ejercicio"
+                        >
+                            <Ionicons name="stop-circle" size={34} color="#FFFFFF" />
+                            <Text style={styles.botonDetenerTexto}>DETENER</Text>
+                        </TouchableOpacity>
+                    </View>
                 </View>
             )}
 
@@ -766,6 +790,13 @@ export default function DetalleEjercicioScreen() {
 }
 
 const styles = StyleSheet.create({
+    filaBotonesControl: { flexDirection: 'row', gap: 12 },
+    botonPausa: {
+        flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10,
+        minHeight: 64, borderRadius: 18, backgroundColor: '#1D4ED8',
+    },
+    botonContinuar: { backgroundColor: '#047857' },
+    textoPausa: { fontSize: 19, fontWeight: '700', textAlign: 'center', marginBottom: 10 },
     barraDetener: {
         paddingHorizontal: 20,
         paddingVertical: 12,
