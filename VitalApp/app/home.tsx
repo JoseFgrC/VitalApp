@@ -30,6 +30,16 @@ const ICONOS_CATEGORIA: Record<string, string> = {
 const iconoCategoria = (categoria: string) => ICONOS_CATEGORIA[(categoria || '').toLowerCase()] || 'fitness';
 
 const DIAS_SEMANA = ['D', 'L', 'M', 'X', 'J', 'V', 'S'];
+const NOMBRES_DIA = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];
+// "09:00" → "9:00"
+const horaLegible = (hora: string) => hora.replace(/^0(\d)/, '$1');
+
+// Nivel funcional explicado en palabras (sin números ni términos técnicos)
+const NIVEL_EN_PALABRAS: Record<number, { nombre: string; detalle: string }> = {
+  1: { nombre: 'Suave', detalle: 'Ejercicios sentado o con apoyo' },
+  2: { nombre: 'Moderado', detalle: 'Ejercicios de pie con apoyo cercano' },
+  3: { nombre: 'Activo', detalle: 'Ejercicios de fuerza, equilibrio y resistencia' },
+};
 
 // Próximo recordatorio activo a partir de ahora (hoy o en los siguientes 7 días)
 function calcularProximo(recordatorios: { hora: string; dias: string[]; activo: boolean }[]): string | null {
@@ -47,7 +57,10 @@ function calcularProximo(recordatorios: { hora: string; dias: string[]; activo: 
         return h * 60 + m > ahora.getHours() * 60 + ahora.getMinutes();
       })
       .sort();
-    if (delDia.length) return d === 0 ? `Hoy ${delDia[0]}` : d === 1 ? `Mañana ${delDia[0]}` : `${letra} ${delDia[0]}`;
+    if (delDia.length) {
+      const hora = horaLegible(delDia[0]);
+      return d === 0 ? `hoy a las ${hora}` : d === 1 ? `mañana a las ${hora}` : `el ${NOMBRES_DIA[fecha.getDay()]} a las ${hora}`;
+    }
   }
   return null;
 }
@@ -654,6 +667,83 @@ export default function HomeScreen() {
           </View>
         </LinearGradient>
 
+        {/* Tu plan de hoy: lo esencial arriba, con un solo botón grande (accesibilidad) */}
+        <View style={[styles.planHoy, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}>
+          <Text style={[styles.planHoyTitulo, { color: colors.text }]}>Tu plan de hoy</Text>
+
+          {nivelFuncional === null ? (
+            <>
+              <Text style={[styles.planHoyTexto, { color: colors.text }]}>
+                Aún no conocemos tu nivel. Responde unas preguntas para recomendarte ejercicios seguros.
+              </Text>
+              <TouchableOpacity style={styles.planHoyBoton} onPress={() => router.push('/valoracion')} accessibilityRole="button">
+                <Ionicons name="clipboard-outline" size={30} color="#FFFFFF" />
+                <Text style={styles.planHoyBotonTexto}>Responder las preguntas</Text>
+              </TouchableOpacity>
+            </>
+          ) : nivelFuncional === 0 ? (
+            <>
+              <Text style={[styles.planHoyTexto, { color: colors.text }]}>
+                Por tus respuestas, consulta a tu médico antes de hacer ejercicio.
+              </Text>
+              <TouchableOpacity style={[styles.planHoyBoton, styles.planHoyBotonSecundario]} onPress={() => router.push('/valoracion')} accessibilityRole="button">
+                <Ionicons name="refresh" size={28} color="#1E3A8A" />
+                <Text style={[styles.planHoyBotonTexto, { color: '#1E3A8A' }]}>Mi médico ya me autorizó</Text>
+              </TouchableOpacity>
+            </>
+          ) : (
+            <>
+              <View style={[styles.planHoyNivel, { backgroundColor: colors.isDark ? '#1E3A8A' : '#EFF6FF' }]}>
+                <Ionicons name="speedometer-outline" size={28} color={colors.isDark ? '#FFFFFF' : '#1E3A8A'} />
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.planHoyNivelNombre, { color: colors.isDark ? '#FFFFFF' : '#1E3A8A' }]}>
+                    Tu nivel: {NIVEL_EN_PALABRAS[nivelFuncional]?.nombre}
+                  </Text>
+                  <Text style={[styles.planHoyTexto, { color: colors.isDark ? '#E0E7FF' : '#1E293B', marginBottom: 0 }]}>
+                    {NIVEL_EN_PALABRAS[nivelFuncional]?.detalle}
+                  </Text>
+                </View>
+              </View>
+
+              {rutinaCompletada ? (
+                <View style={styles.planHoyHecho} accessibilityRole="text">
+                  <Ionicons name="checkmark-circle" size={34} color="#FFFFFF" />
+                  <Text style={styles.planHoyBotonTexto}>Ya hiciste tu rutina de hoy</Text>
+                </View>
+              ) : (
+                <TouchableOpacity
+                  style={styles.planHoyBoton}
+                  onPress={iniciarEntrenamiento}
+                  accessibilityRole="button"
+                  accessibilityHint={`${currentWorkout.title.toLowerCase()}, ${currentWorkout.exercises.length} ejercicios`}
+                >
+                  <Ionicons name="play-circle" size={34} color="#FFFFFF" />
+                  <Text style={styles.planHoyBotonTexto}>Hacer mi rutina de hoy</Text>
+                </TouchableOpacity>
+              )}
+              <Text style={[styles.planHoyTexto, { color: colors.textSecondary, marginTop: 10, marginBottom: 0 }]}>
+                {rutinaCompletada
+                  ? '¡Muy bien! Mañana tendrás una rutina nueva.'
+                  : ejerciciosHechos > 0
+                    ? `Llevas ${ejerciciosHechos} de ${currentWorkout.exercises.length} ejercicios de hoy.`
+                    : `${currentWorkout.exercises.length} ejercicios · ${currentWorkout.time.split(' - ')[0]}`}
+              </Text>
+            </>
+          )}
+
+          <TouchableOpacity
+            style={[styles.planHoyRecordatorio, { borderTopColor: colors.cardBorder }]}
+            onPress={() => router.push('/recordatorios')}
+            accessibilityRole="button"
+          >
+            <Ionicons name="alarm-outline" size={28} color={colors.isDark ? '#93C5FD' : '#1D4ED8'} />
+            <Text style={[styles.planHoyTexto, { color: colors.text, flex: 1, marginBottom: 0 }]}>
+              {proximoRecordatorio ? `Próximo recordatorio: ${proximoRecordatorio}` : 'No tienes recordatorios. Toca aquí para programar uno.'}
+            </Text>
+            <Ionicons name="chevron-forward" size={24} color={colors.textSecondary} />
+          </TouchableOpacity>
+        </View>
+
         {/* Banner de Motivación */}
         <TouchableOpacity style={[styles.motivationBanner, { backgroundColor: colors.card, borderColor: colors.cardBorder }]} onPress={irAEstadisticas} activeOpacity={0.9}>
           <View style={styles.bannerContent}>
@@ -1005,7 +1095,7 @@ export default function HomeScreen() {
                     onPress={() => router.push('/recordatorios')}
                 >
                     <Ionicons name="alarm" size={32} color="#EF4444" />
-                    <Text style={[styles.wellnessValue, { color: colors.text, fontSize: proximoRecordatorio ? 16 : 20 }]} numberOfLines={1}>
+                    <Text style={[styles.wellnessValue, { color: colors.text, fontSize: proximoRecordatorio ? 16 : 20 }]} numberOfLines={2}>
                         {proximoRecordatorio || 'Sin horario'}
                     </Text>
                     <Text style={[styles.wellnessLabel, { color: colors.textSecondary }]}>Próximo ejercicio</Text>
@@ -1059,6 +1149,23 @@ export default function HomeScreen() {
 }
 
 const styles = StyleSheet.create({
+  planHoy: { marginHorizontal: 20, marginTop: 16, marginBottom: 16, padding: 20, borderRadius: 24, borderWidth: 2 },
+  planHoyTitulo: { fontSize: 26, fontWeight: '900', marginBottom: 12 },
+  planHoyTexto: { fontSize: 19, lineHeight: 27, marginBottom: 14 },
+  planHoyNivel: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 14, borderRadius: 16, marginBottom: 16 },
+  planHoyNivelNombre: { fontSize: 21, fontWeight: '800', marginBottom: 2 },
+  planHoyBoton: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 12,
+    minHeight: 72, paddingHorizontal: 20, borderRadius: 20, backgroundColor: '#047857',
+  },
+  planHoyBotonSecundario: { backgroundColor: '#DBEAFE' },
+  planHoyHecho: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 12,
+    minHeight: 72, paddingHorizontal: 20, borderRadius: 20, backgroundColor: '#166534',
+  },
+  planHoyBotonTexto: { color: '#FFFFFF', fontSize: 22, fontWeight: '800', flexShrink: 1, textAlign: 'center' },
+  planHoyRecordatorio: { flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 16, paddingTop: 16, borderTopWidth: 1, minHeight: 56 },
+
   safeArea: { flex: 1, backgroundColor: '#F8FAFC' },
   container: { flex: 1, backgroundColor: '#F8FAFC' },
   scrollContent: { paddingBottom: 100 },
