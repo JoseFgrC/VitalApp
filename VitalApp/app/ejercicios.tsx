@@ -227,7 +227,7 @@ export default function EjerciciosScreen() {
                 </View>
                 <View style={styles.conditionBanner}>
                     <Text style={styles.conditionBannerText} numberOfLines={2}>
-                        {userConditions.length > 0 ? `Condiciones registradas: ${conditionSummary}` : 'Marca tus condiciones en Enfermedades para ver recomendaciones y ejercicios no recomendados.'}
+                        {userConditions.length > 0 ? `Condiciones registradas: ${conditionSummary}` : 'Marca tus condiciones en «Mi salud» para ver recomendaciones y ejercicios no recomendados.'}
                     </Text>
                 </View>
                 

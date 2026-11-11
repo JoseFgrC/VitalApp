@@ -242,7 +242,7 @@ export default function EstadisticasScreen() {
                         <TouchableOpacity onPress={() => router.push('/home')} style={{marginRight: 16}}>
                             <Ionicons name="arrow-back" size={28} color="#FFFFFF" />
                         </TouchableOpacity>
-                        <Text style={[styles.headerTitle, {marginBottom: 0}]}>Mi Progreso</Text>
+                        <Text style={[styles.headerTitle, {marginBottom: 0}]}>Mi progreso</Text>
                     </View>
                     <Text style={styles.headerSubtitle}>Sigue avanzando cada día, estás haciendo un gran trabajo.</Text>
                     

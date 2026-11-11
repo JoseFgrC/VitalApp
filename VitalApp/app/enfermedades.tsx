@@ -138,7 +138,7 @@ export default function EnfermedadesScreen() {
         showsVerticalScrollIndicator={false}
       >
         <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}> 
-          <Text style={[styles.title, { color: colors.text }]}>Enfermedades</Text>
+          <Text style={[styles.title, { color: colors.text }]}>Mi salud</Text>
           <Text style={[styles.subtitle, { color: colors.textSecondary }]}>Marca las condiciones de salud que aplican para adaptar tus ejercicios de forma más segura.</Text>
 
           <View style={styles.conditionsContainer}>

@@ -336,7 +336,7 @@ export default function HomeScreen() {
 
   const healthConditionNote = userConditions.length
     ? `Rutinas adaptadas a: ${conditionSummary}`
-    : 'Registra tus condiciones en Enfermedades para obtener recomendaciones personalizadas.';
+    : 'Registra tus condiciones en «Mi salud» para obtener recomendaciones personalizadas.';
 
   // RN03: solo rutinas del nivel asignado o inferiores; sin nivel conocido se usa el más conservador
   const nivelPermitido = nivelFuncional ?? 1;
