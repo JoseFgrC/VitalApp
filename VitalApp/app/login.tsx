@@ -1,8 +1,7 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import {
     View, Text, TextInput, TouchableOpacity, StyleSheet,
-    SafeAreaView, KeyboardAvoidingView, Platform, Alert,
-    ActivityIndicator, ScrollView, StatusBar, Dimensions,
+    SafeAreaView, KeyboardAvoidingView, Platform, ActivityIndicator, ScrollView, StatusBar, Dimensions,
     Animated, Easing,
 } from 'react-native';
 import { useRouter } from 'expo-router';
@@ -41,9 +40,10 @@ if (Platform.OS === 'web' && typeof document !== 'undefined') {
     }
 }
 import { API_URL } from '../constants/config';
-import { fetchSeguro } from '../utils/api';
+import { fetchSeguro, rutaInicial } from '../utils/api';
 
 
+import { avisar } from '../utils/dialogos';
 const isWeb = Platform.OS === 'web';
 const { width: SW, height: SH } = Dimensions.get('window');
 
@@ -174,7 +174,7 @@ const AnimatedBackground = React.memo(() => {
                 top: 0,
                 left: 0,
                 right: 0,
-                height: SH,
+                bottom: 0,
                 transform: [{ scale: imgScale }, { translateX: imgX }],
             }}>
                 <Animated.Image
@@ -289,6 +289,17 @@ const Background = React.memo(({ children }: { children: React.ReactNode }) => (
 ));
 
 export default function LoginScreen() {
+    // Aviso cuando se llega aquí porque la sesión terminó (ver sesionTerminada en utils/api.ts)
+    const [avisoSesion, setAvisoSesion] = useState('');
+    useEffect(() => {
+        AsyncStorage.getItem('avisoSesion').then((m) => {
+            if (m) {
+                setAvisoSesion(m);
+                AsyncStorage.removeItem('avisoSesion');
+            }
+        }).catch(() => {});
+    }, []);
+
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [showPass, setShowPass] = useState(false);
@@ -296,6 +307,7 @@ export default function LoginScreen() {
     const [cargando, setCargando] = useState(false);
     const [errorLogin, setErrorLogin] = useState(false);
     const [nombre, setNombre] = useState('');
+    const [tipoCuenta, setTipoCuenta] = useState<'usuario' | 'cuidador'>('usuario');
     const [fechaNacimiento, setFechaNacimiento] = useState('');
     const [peso, setPeso] = useState('');
     const [altura, setAltura] = useState('');
@@ -324,18 +336,18 @@ export default function LoginScreen() {
             if (id_token) {
                 handleRealGoogleOAuth(id_token);
             } else {
-                Alert.alert('Error SSO', `Google no devolvió el ID Token.\nCampos recibidos: ${Object.keys(response.params || {}).join(', ')}`);
+                avisar('Error SSO', `Google no devolvió el ID Token.\nCampos recibidos: ${Object.keys(response.params || {}).join(', ')}`);
             }
         } else if (response?.type === 'error') {
             console.log('[Google SSO] Error response:', JSON.stringify(response));
-            Alert.alert('Error SSO', 'No se pudo completar el inicio de sesión con Google.');
+            avisar('Error SSO', 'No se pudo completar el inicio de sesión con Google.');
         }
     }, [response]);
 
     // ── LOGIN ─────────────────────────────────────────────────────────────────
     const handleLogin = async () => {
         if (!email || !password) {
-            Alert.alert('Faltan datos', 'Ingresa tu correo y contraseña.');
+            avisar('Faltan datos', 'Ingresa tu correo y contraseña.');
             return;
         }
         setCargando(true);
@@ -359,12 +371,12 @@ export default function LoginScreen() {
                 await AsyncStorage.setItem('userAge', (u.edad ?? '').toString());
                 await AsyncStorage.setItem('userRol', u.rol || 'usuario');
                 await AsyncStorage.setItem('jwtToken', data.token);
-                router.replace(u.rol === 'admin' ? '/admin' : '/home');
+                router.replace(await rutaInicial(u.rol || 'usuario'));
             } else {
                 setErrorLogin(true);
             }
         } catch (e: any) {
-            Alert.alert('Error de conexión', e.message);
+            avisar('Error de conexión', e.message);
         } finally {
             setCargando(false);
         }
@@ -373,7 +385,7 @@ export default function LoginScreen() {
     // ── MFA VERIFICACIÓN ──────────────────────────────────────────────────────
     const handleMfaVerify = async () => {
         if (!mfaToken) {
-            Alert.alert('Faltan datos', 'Ingresa el código de 6 dígitos.');
+            avisar('Faltan datos', 'Ingresa el código de 6 dígitos.');
             return;
         }
         setCargando(true);
@@ -392,12 +404,12 @@ export default function LoginScreen() {
                 await AsyncStorage.setItem('userAge', (u.edad ?? '').toString());
                 await AsyncStorage.setItem('userRol', u.rol || 'usuario');
                 await AsyncStorage.setItem('jwtToken', data.token);
-                router.replace(u.rol === 'admin' ? '/admin' : '/home');
+                router.replace(await rutaInicial(u.rol || 'usuario'));
             } else {
-                Alert.alert('Error', data.message || 'Código incorrecto.');
+                avisar('Error', data.message || 'Código incorrecto.');
             }
         } catch (e: any) {
-            Alert.alert('Error de conexión', e.message);
+            avisar('Error de conexión', e.message);
         } finally {
             setCargando(false);
         }
@@ -405,12 +417,15 @@ export default function LoginScreen() {
 
     // ── REGISTRO ──────────────────────────────────────────────────────────────
     const handleRegister = async () => {
-        if (!nombre || !email || !password || !fechaNacimiento || !peso) {
-            Alert.alert('Faltan datos', 'Nombre, correo, contraseña, fecha y peso son obligatorios.');
+        const esCuidador = tipoCuenta === 'cuidador';
+        if (!nombre || !email || !password || !fechaNacimiento || (!esCuidador && !peso)) {
+            avisar('Faltan datos', esCuidador
+                ? 'Nombre, correo, contraseña y fecha de nacimiento son obligatorios.'
+                : 'Nombre, correo, contraseña, fecha y peso son obligatorios.');
             return;
         }
         if (!/^\d{4}-\d{2}-\d{2}$/.test(fechaNacimiento)) {
-            Alert.alert('Fecha inválida', 'Usa AAAA-MM-DD');
+            avisar('Fecha inválida', 'Usa AAAA-MM-DD');
             return;
         }
         setCargando(true);
@@ -419,24 +434,24 @@ export default function LoginScreen() {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
+                    // Los datos de salud no se envían aquí: se capturan después del consentimiento (RN01)
                     nombre, email, password_hash: password, fecha_nacimiento: fechaNacimiento,
-                    peso: parseFloat(peso), altura: altura ? parseFloat(altura) : null,
-                    genero, telefono: telefono || null, nivel_actividad: nivelActividad,
-                    condiciones_medicas: condicionesMedicas || null, restricciones: restricciones || null,
+                    peso: peso ? parseFloat(peso) : null, altura: altura ? parseFloat(altura) : null,
+                    genero, telefono: telefono || null, nivel_actividad: nivelActividad, rol: tipoCuenta,
                 }),
             });
             const data = await res.json();
             if (data.success) {
-                Alert.alert('¡Cuenta creada!', 'Ya puedes iniciar sesión.', [{ text: 'OK' }]);
+                avisar('¡Cuenta creada!', 'Ya puedes iniciar sesión.');
                 setIsRegistering(false);
                 setNombre(''); setFechaNacimiento(''); setPeso(''); setAltura('');
                 setGenero('Otro'); setTelefono(''); setNivelActividad('sedentario');
-                setCondicionesMedicas(''); setRestricciones(''); setPassword(''); setEmail('');
+                setCondicionesMedicas(''); setRestricciones(''); setPassword(''); setEmail(''); setTipoCuenta('usuario');
             } else {
-                Alert.alert('Error', data.message || 'No se pudo crear la cuenta.');
+                avisar('Error', data.message || 'No se pudo crear la cuenta.');
             }
         } catch (e: any) {
-            Alert.alert('Error de conexión', e.message);
+            avisar('Error de conexión', e.message);
         } finally {
             setCargando(false);
         }
@@ -460,12 +475,12 @@ export default function LoginScreen() {
                 await AsyncStorage.setItem('userAge', (u.edad ?? '').toString());
                 await AsyncStorage.setItem('userRol', u.rol || 'usuario');
                 if (data.token) await AsyncStorage.setItem('jwtToken', data.token);
-                router.replace(u.rol === 'admin' ? '/admin' : '/home');
+                router.replace(await rutaInicial(u.rol || 'usuario'));
             } else {
-                Alert.alert('Error SSO', data.message || 'No se pudo iniciar sesión con Google.');
+                avisar('Error SSO', data.message || 'No se pudo iniciar sesión con Google.');
             }
         } catch (e: any) {
-            Alert.alert('Error de conexión', e.message);
+            avisar('Error de conexión', e.message);
         } finally {
             setCargando(false);
         }
@@ -503,7 +518,8 @@ export default function LoginScreen() {
                 keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
             >
                 <ScrollView
-                    contentContainerStyle={st.scroll}
+                    // El registro es más alto que la pantalla: centrado vertical recortaría la parte de arriba en web
+                    contentContainerStyle={[st.scroll, isRegistering && { justifyContent: 'flex-start' }]}
                     showsVerticalScrollIndicator={false}
                     keyboardShouldPersistTaps="handled"
                     bounces={false}
@@ -524,6 +540,12 @@ export default function LoginScreen() {
                     <View style={st.card}>
                         <Text style={st.cardTitle}>{isRegistering ? 'Crear cuenta' : 'Iniciar Sesión'}</Text>
                         <Text style={st.cardSub}>{isRegistering ? 'Únete a VitalApp hoy' : (requiresMfa ? 'Verificación en dos pasos' : 'Bienvenido de nuevo')}</Text>
+                        {avisoSesion && !isRegistering ? (
+                            <View style={st.avisoSesion}>
+                                <Ionicons name="time-outline" size={20} color="#FCD34D" />
+                                <Text style={st.avisoSesionTxt}>{avisoSesion}</Text>
+                            </View>
+                        ) : null}
 
                         {requiresMfa ? (
                             <>
@@ -553,14 +575,33 @@ export default function LoginScreen() {
                             <>
                                 {isRegistering && (
                                     <>
+                                        <Lab text="¿Quién va a usar esta cuenta?" />
+                                        <View style={st.pills}>
+                                            {(['usuario', 'cuidador'] as const).map(op => (
+                                                <TouchableOpacity
+                                                    key={op}
+                                                    style={[st.pill, tipoCuenta === op && st.pillOn]}
+                                                    onPress={() => setTipoCuenta(op)}
+                                                >
+                                                    <Text style={[st.pillTxt, tipoCuenta === op && st.pillTxtOn]}>
+                                                        {op === 'usuario' ? 'Soy adulto mayor' : 'Soy cuidador o familiar'}
+                                                    </Text>
+                                                </TouchableOpacity>
+                                            ))}
+                                        </View>
+
                                         <Lab text="Nombre completo *" />
                                         <Inp icon="person-outline" ph="Ej: Juan Pérez" val={nombre} set={setNombre} />
                                         <Lab text="Fecha de nacimiento *" />
                                         <Inp icon="calendar-outline" ph="AAAA-MM-DD" val={fechaNacimiento} set={setFechaNacimiento} />
-                                        <Lab text="Peso (kg) *" />
-                                        <Inp icon="barbell-outline" ph="Ej: 75.5" val={peso} set={setPeso} kb="numeric" />
-                                        <Lab text="Altura (m)" />
-                                        <Inp icon="resize-outline" ph="Ej: 1.70" val={altura} set={setAltura} kb="numeric" />
+                                        {tipoCuenta === 'usuario' && (
+                                            <>
+                                                <Lab text="Peso (kg) *" />
+                                                <Inp icon="barbell-outline" ph="Ej: 75.5" val={peso} set={setPeso} kb="numeric" />
+                                                <Lab text="Altura (m)" />
+                                                <Inp icon="resize-outline" ph="Ej: 1.70" val={altura} set={setAltura} kb="numeric" />
+                                            </>
+                                        )}
 
                                         <Lab text="Género" />
                                         <View style={st.pills}>
@@ -580,6 +621,8 @@ export default function LoginScreen() {
                                         <Lab text="Teléfono" />
                                         <Inp icon="call-outline" ph="Ej: 312 123 4567" val={telefono} set={setTelefono} kb="phone-pad" />
 
+                                        {tipoCuenta === 'usuario' && (
+                                        <>
                                         <Lab text="Nivel de actividad" />
                                         <View style={st.pills}>
                                             {(['sedentario', 'ligero', 'moderado', 'activo'] as const).map(op => (
@@ -595,10 +638,8 @@ export default function LoginScreen() {
                                             ))}
                                         </View>
 
-                                        <Lab text="Condiciones médicas" />
-                                        <Inp icon="medkit-outline" ph="Ej: Diabetes…" val={condicionesMedicas} set={setCondicionesMedicas} multi />
-                                        <Lab text="Restricciones físicas" />
-                                        <Inp icon="warning-outline" ph="Ej: No levantar peso…" val={restricciones} set={setRestricciones} multi />
+                                        </>
+                                        )}
                                     </>
                                 )}
 
@@ -671,6 +712,8 @@ const INPUT_BDR = 'rgba(60,100,220,0.22)';
 const CARD_MAX = 440;
 
 const st = StyleSheet.create({
+    avisoSesion: { flexDirection: 'row', alignItems: 'center', gap: 8, padding: 12, borderRadius: 12, marginBottom: 12, backgroundColor: 'rgba(252, 211, 77, 0.12)', borderWidth: 1, borderColor: 'rgba(252, 211, 77, 0.4)' },
+    avisoSesionTxt: { flex: 1, color: '#FDE68A', fontSize: 15, fontWeight: '600', lineHeight: 20 },
     root: {
         flex: 1,
         backgroundColor: '#03071E',

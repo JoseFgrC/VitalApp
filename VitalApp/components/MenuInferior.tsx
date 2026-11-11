@@ -10,6 +10,8 @@ export default function MenuInferior() {
   const { width } = useWindowDimensions();
   const { colors } = useTheme();
   const isDesktop = width >= 768;
+  // En teléfonos angostos se reduce el texto para que quepan los 5 botones
+  const compacto = width < 480;
 
   const menuItems = [
     { 
@@ -60,11 +62,13 @@ export default function MenuInferior() {
         return (
           <TouchableOpacity
             key={index}
-            style={styles.menuItem}
+            style={[styles.menuItem, isDesktop && styles.menuItemDesktop]}
+            accessibilityRole="button"
+            accessibilityLabel={item.name}
             onPress={() => router.replace(item.path as any)}
           >
             {item.icon(color, active)}
-            <Text style={[styles.menuText, { color }]}>
+            <Text style={[styles.menuText, compacto && styles.menuTextCompacto, { color }]} numberOfLines={1}>
               {item.name}
             </Text>
             {active && <View style={[styles.activeIndicator, { backgroundColor: color }]} />}
@@ -110,6 +114,7 @@ const styles = StyleSheet.create({
     borderRadius: 30,
     marginBottom: 24,
     marginHorizontal: 20,
+    width: 500,
     left: '50%',
     right: 'auto',
     transform: [{ translateX: -250 }],
@@ -126,12 +131,21 @@ const styles = StyleSheet.create({
       }
     }),
   },
+  // flex: 1 reparte el ancho en partes iguales: nunca se sale un botón de la pantalla
   menuItem: {
+    flex: 1,
+    minWidth: 0,
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: 5,
-    paddingHorizontal: 15,
+    paddingHorizontal: 2,
     position: 'relative',
+  },
+  menuItemDesktop: {
+    paddingHorizontal: 8,
+  },
+  menuTextCompacto: {
+    fontSize: 10,
   },
   menuText: {
     fontSize: 12,

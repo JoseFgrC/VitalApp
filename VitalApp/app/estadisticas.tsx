@@ -17,6 +17,8 @@ import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import MenuInferior from '../components/MenuInferior';
 import { useTheme } from '../hooks/useTheme';
+import { API_URL } from '../constants/config';
+import { fetchSeguro } from '../utils/api';
 import Svg, { Circle, Text as SvgText } from 'react-native-svg';
 
 const { width } = Dimensions.get('window');
@@ -66,6 +68,8 @@ export default function EstadisticasScreen() {
         calorias: 0,
         minutos: 0,
         progresoSemanal: [0, 0, 0, 0, 0, 0, 0],
+        esfuerzoPromedio: null as number | null,
+        detenidas: 0,
         logros: [
             { id: 1, nombre: 'Primer paso', icono: '🌟', desbloqueado: false, condicion: 1, tipo: 'ejercicios' },
             { id: 2, nombre: '5 días seguidos', icono: '🔥', desbloqueado: false, condicion: 5, tipo: 'racha' },
@@ -115,10 +119,29 @@ export default function EstadisticasScreen() {
                 await AsyncStorage.setItem('weeklyHistory', JSON.stringify(progresoSemanal));
             }
 
-            const totalEjercicios = stats ? stats.exercises : 0;
-            const racha = parseInt(rachaStr || '0');
-            const calorias = stats ? stats.calories : 0;
-            const minutos = stats ? stats.minutes : 0;
+            let totalEjercicios = stats ? stats.exercises : 0;
+            let racha = parseInt(rachaStr || '0');
+            let calorias = stats ? stats.calories : 0;
+            let minutos = stats ? stats.minutes : 0;
+            let esfuerzoPromedio: number | null = null;
+            let detenidas = 0;
+
+            // RF11: el progreso real viene de las sesiones guardadas en la BD; lo local queda como respaldo sin conexión
+            try {
+                const res = await fetchSeguro(`${API_URL}/progreso`);
+                const data = await res.json();
+                if (data.success) {
+                    totalEjercicios = data.totales.completadas;
+                    racha = data.racha;
+                    calorias = data.totales.calorias;
+                    minutos = data.totales.minutos;
+                    esfuerzoPromedio = data.totales.esfuerzo_promedio;
+                    detenidas = data.totales.detenidas;
+                    progresoSemanal = data.semana;
+                }
+            } catch (error) {
+                console.log('Sin conexión, mostrando progreso guardado en el teléfono:', error);
+            }
 
             // Meta: totalGoal es la meta semanal, weeklyGoal es lo logrado
             const metaTotal = stats ? (stats.totalGoal || 3) : 3;
@@ -146,6 +169,8 @@ export default function EstadisticasScreen() {
                 calorias,
                 minutos,
                 progresoSemanal,
+                esfuerzoPromedio,
+                detenidas,
                 logros: logrosActualizados
             });
 
@@ -324,6 +349,25 @@ export default function EstadisticasScreen() {
                             </View>
                         </View>
                     </View>
+                </View>
+
+                {/* Esfuerzo percibido y sesiones detenidas (RF10, RF11) */}
+                <View style={[styles.chartCard, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}>
+                    <View style={styles.chartHeader}>
+                        <Ionicons name="pulse" size={24} color="#2563EB" />
+                        <Text style={[styles.chartTitle, { color: colors.text }]}>Cómo te has sentido</Text>
+                    </View>
+                    <Text style={{ fontSize: 18, lineHeight: 26, color: colors.text }}>
+                        Esfuerzo promedio: <Text style={{ fontWeight: '800' }}>
+                            {estadisticas.esfuerzoPromedio === null ? 'sin datos' : `${estadisticas.esfuerzoPromedio} de 10`}
+                        </Text>
+                    </Text>
+                    {estadisticas.detenidas > 0 && (
+                        <Text style={{ fontSize: 18, lineHeight: 26, color: colors.textSecondary, marginTop: 6 }}>
+                            Detuviste {estadisticas.detenidas} {estadisticas.detenidas === 1 ? 'ejercicio' : 'ejercicios'} antes de terminar.
+                            Si fue por sentirte mal, coméntalo con tu médico.
+                        </Text>
+                    )}
                 </View>
 
                 {/* Gráfico de actividad semanal */}

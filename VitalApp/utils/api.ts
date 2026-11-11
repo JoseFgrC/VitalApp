@@ -8,6 +8,7 @@
  * ╚══════════════════════════════════════════════════════════════════╝
  */
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { router } from 'expo-router';
 import { API_URL } from '../constants/config';
 
 // Clave compartida con el backend (debe coincidir con HMAC_SECRET en .env)
@@ -96,16 +97,57 @@ export async function fetchSeguro(url: string, options: RequestInit = {}): Promi
         headers,
     });
     
-    // Si da error de CSRF (403), lo limpiamos para forzar su renovación
-    if (response.status === 403) {
+    if (response.status === 401 || response.status === 403) {
         try {
-            const clone = response.clone();
-            const data = await clone.json();
-            if (data.message && data.message.includes('CSRF')) {
+            const data = await response.clone().json();
+            const mensaje = String(data.message || '');
+            // Si da error de CSRF, lo limpiamos para forzar su renovación
+            if (mensaje.includes('CSRF')) {
                 await AsyncStorage.removeItem('csrfToken');
+            }
+            // Sin sesión o con la sesión vencida: se vuelve al inicio de sesión con un aviso claro
+            if (mensaje.includes('Token JWT')) {
+                await sesionTerminada();
             }
         } catch (e) {}
     }
-    
+
     return response;
+}
+
+// ── Sesión terminada ───────────────────────────────────────────────────────────
+// Pasa cuando se cierra sesión en otra pestaña (comparten el almacenamiento),
+// cuando el token vence (7 días) o al volver con «Atrás» después de salir.
+const CLAVES_SESION = ['jwtToken', 'csrfToken', 'userId', 'userName', 'userEmail', 'userAge', 'userRol', 'userConditions'];
+let redirigiendo = false;
+
+export async function sesionTerminada() {
+    if (redirigiendo) return;   // varias peticiones pueden fallar a la vez: un solo aviso
+    redirigiendo = true;
+    try {
+        await Promise.all(CLAVES_SESION.map(k => AsyncStorage.removeItem(k)));
+        try { await AsyncStorage.setItem('avisoSesion', 'Tu sesión terminó. Inicia sesión de nuevo para continuar.'); } catch (e) {}
+        router.replace('/login');
+    } finally {
+        setTimeout(() => { redirigiendo = false; }, 1500);
+    }
+}
+
+// ── rutaInicial ────────────────────────────────────────────────────────────────
+/**
+ * Decide a qué pantalla llevar al usuario después de iniciar sesión:
+ * sin consentimiento → aviso de privacidad (RN01); sin nivel → valoración; si no, inicio.
+ */
+export async function rutaInicial(rol: string): Promise<'/admin' | '/cuidador' | '/consentimiento' | '/valoracion' | '/home'> {
+    if (rol === 'admin') return '/admin';
+    if (rol === 'cuidador') return '/cuidador';
+    try {
+        const res = await fetchSeguro(`${API_URL}/valoracion`);
+        const data = await res.json();
+        if (data.success && !data.consentimiento) return '/consentimiento';
+        if (data.success && data.nivel === null) return '/valoracion';
+    } catch (e) {
+        console.warn('⚠️ No se pudo consultar la valoración:', e);
+    }
+    return '/home';
 }

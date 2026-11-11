@@ -20,7 +20,10 @@ import { LinearGradient } from 'expo-linear-gradient';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import MenuInferior from '../components/MenuInferior';
 import { useTheme } from '../hooks/useTheme';
+import { API_URL } from '../constants/config';
+import { fetchSeguro } from '../utils/api';
 
+import { avisar } from '../utils/dialogos';
 interface Recordatorio {
     id: number;
     hora: string;
@@ -48,23 +51,44 @@ export default function RecordatoriosScreen() {
         }, [])
     );
 
+    // RF13: los recordatorios se guardan en la BD; AsyncStorage queda como copia sin conexión
+    const subirRecordatorios = async (lista: Recordatorio[]) => {
+        try {
+            await fetchSeguro(`${API_URL}/recordatorios`, {
+                method: 'PUT',
+                body: JSON.stringify({ recordatorios: lista }),
+            });
+        } catch (error) {
+            console.log('No se pudieron guardar los recordatorios en la BD:', error);
+        }
+    };
+
     const cargarRecordatorios = async () => {
         try {
             setCargando(true);
             const guardados = await AsyncStorage.getItem('recordatorios');
             const notifGuardadas = await AsyncStorage.getItem('notifications');
+            const locales: Recordatorio[] | null = guardados ? JSON.parse(guardados) : null;
 
-            if (guardados) {
-                setRecordatorios(JSON.parse(guardados));
-            } else {
-                // Recordatorios por defecto la primera vez
-                const defaults: Recordatorio[] = [
+            let lista: Recordatorio[] | null = null;
+            try {
+                const res = await fetchSeguro(`${API_URL}/recordatorios`);
+                const data = await res.json();
+                if (data.success && data.recordatorios.length > 0) lista = data.recordatorios;
+            } catch (error) {
+                console.log('Sin conexión, usando recordatorios guardados en el teléfono:', error);
+            }
+
+            if (!lista) {
+                // Primera vez: se suben los locales o, si no hay, los recordatorios por defecto
+                lista = locales ?? [
                     { id: 1, hora: '09:00', activo: true, dias: ['L', 'M', 'X', 'J', 'V'], label: 'Rutina matutina' },
                     { id: 2, hora: '18:00', activo: true, dias: ['L', 'M', 'X', 'J', 'V'], label: 'Ejercicio vespertino' },
                 ];
-                setRecordatorios(defaults);
-                await AsyncStorage.setItem('recordatorios', JSON.stringify(defaults));
+                await subirRecordatorios(lista);
             }
+            setRecordatorios(lista);
+            await AsyncStorage.setItem('recordatorios', JSON.stringify(lista));
 
             if (notifGuardadas !== null) {
                 setNotificacionesActivas(notifGuardadas === 'true');
@@ -79,6 +103,7 @@ export default function RecordatoriosScreen() {
     const guardarRecordatorios = async (nuevos: Recordatorio[]) => {
         setRecordatorios(nuevos);
         await AsyncStorage.setItem('recordatorios', JSON.stringify(nuevos));
+        await subirRecordatorios(nuevos);
     };
 
     const toggleRecordatorio = async (id: number) => {
@@ -105,11 +130,11 @@ export default function RecordatoriosScreen() {
         // Validar hora formato HH:MM
         const horaRegex = /^([01]?\d|2[0-3]):([0-5]\d)$/;
         if (!horaRegex.test(nuevaHora)) {
-            Alert.alert('Hora inválida', 'Ingresa la hora en formato HH:MM (ejemplo: 09:00 o 14:30)');
+            avisar('Hora inválida', 'Ingresa la hora en formato HH:MM (ejemplo: 09:00 o 14:30)');
             return;
         }
         if (diasSeleccionados.length === 0) {
-            Alert.alert('Selecciona días', 'Debes seleccionar al menos un día para el recordatorio');
+            avisar('Selecciona días', 'Debes seleccionar al menos un día para el recordatorio');
             return;
         }
 
@@ -194,7 +219,7 @@ export default function RecordatoriosScreen() {
                         <View style={[styles.globalIcon, { backgroundColor: '#EFF6FF' }]}>
                             <Ionicons name="notifications" size={28} color="#2563EB" />
                         </View>
-                        <View>
+                        <View style={{ flex: 1, minWidth: 0 }}>
                             <Text style={styles.globalTitle}>Notificaciones</Text>
                             <Text style={styles.globalSubtitle}>Recibir recordatorios diarios</Text>
                         </View>
@@ -357,7 +382,7 @@ const styles = StyleSheet.create({
         flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12,
     },
     backBtn: { width: 44, height: 44, justifyContent: 'center' },
-    headerTitle: { fontSize: 28, fontWeight: '900', color: '#FFFFFF' },
+    headerTitle: { fontSize: 28, fontWeight: '900', color: '#FFFFFF', flexShrink: 1 },
     addBtn: {
         backgroundColor: '#FFFFFF', width: 40, height: 40, borderRadius: 20,
         justifyContent: 'center', alignItems: 'center',
@@ -382,12 +407,12 @@ const styles = StyleSheet.create({
         }),
         borderWidth: 1, borderColor: '#E2E8F0',
     },
-    globalInfo: { flexDirection: 'row', alignItems: 'center', gap: 16 },
+    globalInfo: { flexDirection: 'row', alignItems: 'center', gap: 12, flex: 1, minWidth: 0, marginRight: 8 },
     globalIcon: {
         width: 52, height: 52, borderRadius: 26, justifyContent: 'center', alignItems: 'center',
     },
     globalTitle: { fontSize: 18, fontWeight: '800', color: '#1E293B' },
-    globalSubtitle: { fontSize: 14, color: '#64748B', marginTop: 2 },
+    globalSubtitle: { fontSize: 14, color: '#64748B', marginTop: 2, flexShrink: 1 },
     sectionTitle: { fontSize: 20, fontWeight: '800', color: '#1E293B', marginHorizontal: 20, marginBottom: 16 },
     emptyState: {
         alignItems: 'center', paddingVertical: 60,
@@ -413,14 +438,14 @@ const styles = StyleSheet.create({
         borderWidth: 1, borderColor: '#E2E8F0',
     },
     reminderCardInactive: { opacity: 0.6 },
-    reminderTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
+    reminderTop: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8, rowGap: 4 },
     reminderTimeContainer: { flexDirection: 'row', alignItems: 'center', gap: 10 },
     reminderTime: { fontSize: 28, fontWeight: '900', color: '#1E293B' },
     reminderLabel: { fontSize: 16, color: '#64748B', fontWeight: '600', marginBottom: 12 },
     reminderActions: { flexDirection: 'row', alignItems: 'center', gap: 8 },
     deleteBtn: { padding: 8 },
     textInactive: { color: '#94A3B8' },
-    diasContainer: { flexDirection: 'row', gap: 8 },
+    diasContainer: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
     diaBadge: {
         width: 36, height: 36, borderRadius: 18, backgroundColor: '#F8FAFC',
         justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: '#E2E8F0',
@@ -456,9 +481,9 @@ const styles = StyleSheet.create({
         paddingHorizontal: 20, paddingVertical: 16, fontSize: 18,
         color: '#1E293B', backgroundColor: '#F8FAFC',
     },
-    modalDias: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 8 },
+    modalDias: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', gap: 4, marginTop: 8 },
     modalDiaBadge: {
-        width: 42, height: 42, borderRadius: 21, backgroundColor: '#F8FAFC',
+        width: 40, height: 40, borderRadius: 20, backgroundColor: '#F8FAFC',
         justifyContent: 'center', alignItems: 'center', borderWidth: 2, borderColor: '#E2E8F0',
     },
     modalDiaBadgeActive: { backgroundColor: '#2563EB', borderColor: '#2563EB' },

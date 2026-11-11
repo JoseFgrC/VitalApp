@@ -18,6 +18,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { API_URL } from '../constants/config';
 import { fetchSeguro } from '../utils/api';
+import { evaluarEjercicio, cargarCondiciones as cargarCondicionesUsuario } from '../utils/condiciones';
 import MenuInferior from '../components/MenuInferior';
 import { useTheme } from '../hooks/useTheme';
 import { getVideoIdForExercise } from '../constants/exercises';
@@ -30,6 +31,8 @@ interface Ejercicio {
     dificultad: string;
     categoria: string;
     url?: string;
+    contraindicaciones?: string;
+    fuente?: string;
 }
 
 export default function EjerciciosScreen() {
@@ -39,6 +42,8 @@ export default function EjerciciosScreen() {
     const [cargando, setCargando] = useState(true);
     const [userConditions, setUserConditions] = useState<string[]>([]);
     const [showOnlyRecommended, setShowOnlyRecommended] = useState(false);
+    // Aviso cuando no hay ejercicios por falta de valoración o por nivel 0
+    const [avisoNivel, setAvisoNivel] = useState<{ requiereValoracion: boolean; mensaje: string } | null>(null);
     const router = useRouter();
     const { colors } = useTheme();
 
@@ -49,7 +54,7 @@ export default function EjerciciosScreen() {
 
     const [categoriaSeleccionada, setCategoriaSeleccionada] = useState('Todas');
 
-    const categorias = ['Todas', 'Cardio', 'Zumba', 'Fuerza', 'Flexibilidad', 'Equilibrio', 'Movilidad', 'Silla', 'Relajación', 'Respiración', 'Pilates', 'Yoga'];
+    const categorias = ['Todas', 'Cardio', 'Zumba', 'Baile', 'Fuerza', 'Flexibilidad', 'Equilibrio', 'Movilidad', 'Silla', 'Relajación', 'Respiración', 'Pilates', 'Yoga'];
 
     useEffect(() => {
         let filtradosTemp = ejercicios;
@@ -72,22 +77,25 @@ export default function EjerciciosScreen() {
         setFiltrados(filtradosTemp);
     }, [busqueda, categoriaSeleccionada, ejercicios]);
 
+    // Las condiciones se leen de la BD (cifradas) para que sean las de esta cuenta
     const cargarCondiciones = async () => {
-        try {
-            const condicionesGuardadas = await AsyncStorage.getItem('userConditions');
-            if (condicionesGuardadas) {
-                const condiciones = JSON.parse(condicionesGuardadas);
-                setUserConditions(Array.isArray(condiciones) ? condiciones : []);
-            }
-        } catch (error) {
-            console.log('Error cargando condiciones:', error);
-        }
+        setUserConditions(await cargarCondicionesUsuario());
     };
 
     const cargarEjercicios = async () => {
         try {
-            const response = await fetchSeguro(`${API_URL}/exercises`);
+            // RN03: solo se muestran ejercicios del nivel funcional asignado o inferiores
+            const userId = await AsyncStorage.getItem('userId');
+            const response = await fetchSeguro(`${API_URL}/exercises/user/${userId}`);
             const data = await response.json();
+
+            if (data.requiere_valoracion) {
+                setAvisoNivel({ requiereValoracion: true, mensaje: 'Antes de ver ejercicios necesitamos conocer tu nivel. Responde la valoración inicial.' });
+            } else if (data.nivel === 0) {
+                setAvisoNivel({ requiereValoracion: false, mensaje: data.message });
+            } else {
+                setAvisoNivel(null);
+            }
 
             // Map the backend data structure to match the frontend Ejercicio interface
             const ejerciciosMapeados = (data.exercises || []).map((e: any) => ({
@@ -97,27 +105,18 @@ export default function EjerciciosScreen() {
                 duracion: e.duracion_min ? e.duracion_min * 60 : (e.duracion || 0),
                 dificultad: e.dificultad,
                 categoria: e.categoria || 'Variado',
-                url: e.link_video || e.url || ''
+                url: e.link_video || e.url || '',
+                contraindicaciones: e.contraindicaciones || '',
+                fuente: e.fuente_documental || ''
             }));
 
             setEjercicios(ejerciciosMapeados);
             setFiltrados(ejerciciosMapeados);
         } catch (error) {
+            // Sin conexión no se muestran ejercicios: no hay forma de comprobar el nivel del usuario
             console.error('Error:', error);
-            // Datos de prueba premium extendidos
-            const datosPrueba = [
-                { id: 1, nombre: 'Zumba Gold: Ritmos Latinos', descripcion: 'Diviértete bailando ritmos suaves diseñados para tu energía', duracion: 1200, dificultad: 'Fácil', categoria: 'Zumba', url: '' },
-                { id: 2, nombre: 'Baile en Silla Alegre', descripcion: 'Mueve el cuerpo al compás de la música sin levantarte', duracion: 900, dificultad: 'Fácil', categoria: 'Zumba', url: '' },
-                { id: 3, nombre: 'Cardio Dance Pop', descripcion: 'Ejercítate con los mejores éxitos musicales de siempre', duracion: 1500, dificultad: 'Normal', categoria: 'Zumba', url: '' },
-                { id: 4, nombre: 'Salto De Tijera', descripcion: 'Excelente ejercicio cardiovascular para despertar el cuerpo', duracion: 1800, dificultad: 'Normal', categoria: 'Cardio', url: '' },
-                { id: 5, nombre: 'Toque al Talón', descripcion: 'Fortalece piernas y glúteos suavemente', duracion: 900, dificultad: 'Fácil', categoria: 'Fuerza', url: '' },
-                { id: 6, nombre: 'Abdominal Cruzado', descripcion: 'Trabaja el núcleo y mejora la postura', duracion: 1200, dificultad: 'Normal', categoria: 'Fuerza', url: '' },
-                { id: 7, nombre: 'Equilibrio en un pie', descripcion: 'Mejora tu estabilidad y evita caídas', duracion: 300, dificultad: 'Fácil', categoria: 'Equilibrio', url: '' },
-                { id: 8, nombre: 'Yoga en silla', descripcion: 'Estiramientos suaves sin levantarte', duracion: 600, dificultad: 'Fácil', categoria: 'Silla', url: '' },
-                { id: 9, nombre: 'Caminata rítmica', descripcion: 'Marcha al compás de la música', duracion: 1200, dificultad: 'Normal', categoria: 'Cardio', url: '' },
-            ];
-            setEjercicios(datosPrueba);
-            setFiltrados(datosPrueba);
+            setEjercicios([]);
+            setFiltrados([]);
         } finally {
             setCargando(false);
         }
@@ -132,7 +131,10 @@ export default function EjerciciosScreen() {
                 descripcion: ejercicio.descripcion || 'Sin descripción',
                 duracion: ejercicio.duracion.toString(),
                 dificultad: ejercicio.dificultad,
-                url: encodeURIComponent(ejercicio.url || '')
+                url: encodeURIComponent(ejercicio.url || ''),
+                id_video: ejercicio.id.toString(),
+                contraindicaciones: ejercicio.contraindicaciones || '',
+                fuente: ejercicio.fuente || ''
             }
         });
     };
@@ -152,6 +154,7 @@ export default function EjerciciosScreen() {
         switch ((categoria || '').toLowerCase()) {
             case 'cardio': return 'heart-outline';
             case 'zumba': return 'musical-notes-outline';
+            case 'baile': return 'musical-note-outline';
             case 'fuerza': return 'barbell-outline';
             case 'flexibilidad': return 'body-outline';
             case 'estiramiento': return 'leaf-outline';
@@ -165,58 +168,12 @@ export default function EjerciciosScreen() {
         }
     };
 
-    const hasCondition = (keyword: string) =>
-        userConditions.some((condition) =>
-            condition.toLowerCase().includes(keyword.toLowerCase())
-        );
-
-    const hasHeartCondition = hasCondition('corazón') || hasCondition('corazon') || hasCondition('problemas de corazón') || hasCondition('hipertensión') || hasCondition('hipertension');
-    const hasCancer = hasCondition('cáncer') || hasCondition('cancer');
-    const hasDiabetes = hasCondition('diabetes');
-    const hasHypertension = hasCondition('hipertensión') || hasCondition('hipertension');
-    const hasArthritis = hasCondition('artritis');
-    const hasOsteoporosis = hasCondition('osteoporosis');
-
     const conditionSummary = userConditions.length > 0
         ? userConditions.join(', ')
         : 'Ninguna condición registrada';
 
-    const getExerciseAdvice = (ejercicio: Ejercicio) => {
-        const categoria = (ejercicio.categoria ?? '').toString().toLowerCase();
-        const nombre = (ejercicio.nombre ?? '').toString().toLowerCase();
-
-        if (hasHeartCondition || hasHypertension) {
-            if (['cardio', 'zumba', 'fuerza'].includes(categoria)) {
-                return 'No recomendado para tu condición cardíaca o hipertensión';
-            }
-        }
-
-        if (hasCancer) {
-            if (['cardio', 'fuerza'].includes(categoria)) {
-                return 'No recomendado durante condiciones de cáncer; elige algo más suave';
-            }
-        }
-
-        if (hasArthritis) {
-            if (['fuerza', 'zumba'].includes(categoria)) {
-                return 'Puede ser incómodo si tienes artritis; elige ejercicios suaves';
-            }
-        }
-
-        if (hasOsteoporosis) {
-            if (['fuerza', 'cardio'].includes(categoria)) {
-                return 'Evita ejercicios de impacto elevado si tienes osteoporosis';
-            }
-        }
-
-        if (hasDiabetes) {
-            if (['cardio', 'zumba'].includes(categoria) || nombre.includes('caminata')) {
-                return 'Hazlo con precaución y mantén tu ritmo constante';
-            }
-        }
-
-        return '';
-    };
+    // Mismas reglas que Inicio (utils/condiciones.ts)
+    const getExerciseAdvice = (ejercicio: Ejercicio) => evaluarEjercicio(ejercicio.categoria, userConditions).aviso;
 
     const getDificultadColor = (dificultad: string) => {
         switch ((dificultad || '').toLowerCase()) {
@@ -231,7 +188,7 @@ export default function EjerciciosScreen() {
     };
 
     const visibleEjercicios = showOnlyRecommended
-        ? filtrados.filter((ej) => getExerciseAdvice(ej) === '')
+        ? filtrados.filter((ej) => !evaluarEjercicio(ej.categoria, userConditions).evitar)
         : filtrados;
 
     if (cargando) {
@@ -265,12 +222,12 @@ export default function EjerciciosScreen() {
                         <Text style={styles.headerTitle}>Explorar</Text>
                     </View>
                     <View style={styles.countBadge}>
-                        <Text style={styles.countText}>{visibleEjercicios.length} rutinas</Text>
+                        <Text style={styles.countText}>{visibleEjercicios.length} {visibleEjercicios.length === 1 ? 'ejercicio' : 'ejercicios'}</Text>
                     </View>
                 </View>
                 <View style={styles.conditionBanner}>
                     <Text style={styles.conditionBannerText} numberOfLines={2}>
-                        {userConditions.length > 0 ? `Condiciones registrados: ${conditionSummary}` : 'Marca tus condiciones en Enfermedades para ver recomendaciones y ejercicios no recomendados.'}
+                        {userConditions.length > 0 ? `Condiciones registradas: ${conditionSummary}` : 'Marca tus condiciones en Enfermedades para ver recomendaciones y ejercicios no recomendados.'}
                     </Text>
                 </View>
                 
@@ -335,7 +292,23 @@ export default function EjerciciosScreen() {
                 </View>
             </LinearGradient>
 
-                {visibleEjercicios.length === 0 ? (
+                {avisoNivel ? (
+                    <View style={styles.emptyContainer}>
+                        <View style={styles.emptyIconCircle}>
+                            <Ionicons name={avisoNivel.requiereValoracion ? 'clipboard-outline' : 'medkit-outline'} size={60} color="#2563EB" />
+                        </View>
+                        <Text style={styles.emptyText}>{avisoNivel.requiereValoracion ? 'Falta tu valoración' : 'Consulta a tu médico'}</Text>
+                        <Text style={styles.emptySubtext}>{avisoNivel.mensaje}</Text>
+                        <TouchableOpacity
+                            style={{ marginTop: 20, backgroundColor: '#1D4ED8', borderRadius: 16, minHeight: 60, paddingHorizontal: 28, justifyContent: 'center' }}
+                            onPress={() => router.push('/valoracion')}
+                        >
+                            <Text style={{ color: '#FFFFFF', fontSize: 20, fontWeight: '800' }}>
+                                {avisoNivel.requiereValoracion ? 'Hacer la valoración' : 'Repetir la valoración'}
+                            </Text>
+                        </TouchableOpacity>
+                    </View>
+                ) : visibleEjercicios.length === 0 ? (
                     <View style={styles.emptyContainer}>
                         <View style={styles.emptyIconCircle}>
                             <Ionicons name="search-outline" size={60} color="#94A3B8" />
@@ -491,6 +464,8 @@ const styles = StyleSheet.create({
     },
     headerTop: {
         flexDirection: 'row',
+        flexWrap: 'wrap',
+        rowGap: 8,
         justifyContent: 'space-between',
         alignItems: 'center',
         marginBottom: 8,

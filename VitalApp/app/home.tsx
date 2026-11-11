@@ -14,6 +14,42 @@ import { API_URL } from '../constants/config';
 import { fetchSeguro } from '../utils/api';
 
 
+import { avisar } from '../utils/dialogos';
+import { evaluarEjercicio, cargarCondiciones } from '../utils/condiciones';
+
+type Recomendado = {
+  title: string; categoria: string; time: string; intensity: string; nivel: number;
+  icon: string; color: string; desc: string; bd?: any;
+};
+
+const ICONOS_CATEGORIA: Record<string, string> = {
+  cardio: 'walk', zumba: 'musical-notes', baile: 'musical-note', fuerza: 'barbell', flexibilidad: 'body', equilibrio: 'shield-checkmark',
+  movilidad: 'accessibility', silla: 'body', 'relajación': 'leaf', 'respiración': 'leaf', pilates: 'fitness', yoga: 'leaf',
+};
+const iconoCategoria = (categoria: string) => ICONOS_CATEGORIA[(categoria || '').toLowerCase()] || 'fitness';
+
+const DIAS_SEMANA = ['D', 'L', 'M', 'X', 'J', 'V', 'S'];
+
+// Próximo recordatorio activo a partir de ahora (hoy o en los siguientes 7 días)
+function calcularProximo(recordatorios: { hora: string; dias: string[]; activo: boolean }[]): string | null {
+  const ahora = new Date();
+  for (let d = 0; d < 8; d++) {
+    const fecha = new Date(ahora);
+    fecha.setDate(ahora.getDate() + d);
+    const letra = DIAS_SEMANA[fecha.getDay()];
+    const delDia = recordatorios
+      .filter((r) => r.activo && r.dias.includes(letra))
+      .map((r) => r.hora)
+      .filter((hora) => {
+        if (d > 0) return true;
+        const [h, m] = hora.split(':').map(Number);
+        return h * 60 + m > ahora.getHours() * 60 + ahora.getMinutes();
+      })
+      .sort();
+    if (delDia.length) return d === 0 ? `Hoy ${delDia[0]}` : d === 1 ? `Mañana ${delDia[0]}` : `${letra} ${delDia[0]}`;
+  }
+  return null;
+}
 export default function HomeScreen() {
   const router = useRouter();
   const { colors } = useTheme();
@@ -36,6 +72,16 @@ export default function HomeScreen() {
   const [completadosHoy, setCompletadosHoy] = useState(0);
   const [hydration, setHydration] = useState(0);
   const [dailyTip, setDailyTip] = useState('');
+  // Nivel funcional asignado por la valoración (RN03); null mientras no se conoce
+  const [nivelFuncional, setNivelFuncional] = useState<number | null>(null);
+  // Datos del perfil para personalizar los recomendados
+  const [edadUsuario, setEdadUsuario] = useState<number | null>(null);
+  const [ejerciciosBD, setEjerciciosBD] = useState<any[]>([]);
+  // Rutinas publicadas por el admin que este usuario puede hacer completas (GET /api/rutinas)
+  const [rutinasBD, setRutinasBD] = useState<any[]>([]);
+  // Nombres (en minúsculas) de los ejercicios completados hoy, según el historial de la BD
+  const [hechosHoy, setHechosHoy] = useState<string[]>([]);
+  const [proximoRecordatorio, setProximoRecordatorio] = useState<string | null>(null);
 
   // Cargar datos cada vez que la pantalla tiene foco
   useFocusEffect(
@@ -63,19 +109,17 @@ export default function HomeScreen() {
       if (userIdGuardado)    setUserId(userIdGuardado);
       if (completadosHoyGuardados) setCompletadosHoy(parseInt(completadosHoyGuardados));
 
-      const condicionesGuardadas = await AsyncStorage.getItem('userConditions');
-      if (condicionesGuardadas) {
-        const condiciones = JSON.parse(condicionesGuardadas);
-        const condicionesArray = Array.isArray(condiciones) ? condiciones : [];
-        setUserConditions(condicionesArray);
-        setConditionSummary(condicionesArray.length > 0 ? condicionesArray.join(', ') : 'Ninguna condición registrada');
-      }
+      // Condiciones de salud: se leen de la BD (cifradas) para que sean las de esta cuenta
+      const condicionesArray = await cargarCondiciones();
+      setUserConditions(condicionesArray);
+      setConditionSummary(condicionesArray.length > 0 ? condicionesArray.join(', ') : 'Ninguna condición registrada');
 
       // Peso: se obtiene del backend con el id_usuario real
       if (userIdGuardado) {
         try {
           const res = await fetchSeguro(`${API_URL}/user/${userIdGuardado}`);
           const data = await res.json();
+          if (data.success && data.user?.edad != null) setEdadUsuario(Number(data.user.edad));
           if (data.success && data.user?.peso) {
             setPeso(parseFloat(data.user.peso));
             await AsyncStorage.setItem('userWeight', data.user.peso.toString());
@@ -85,6 +129,52 @@ export default function HomeScreen() {
           const pesoGuardado = await AsyncStorage.getItem('userWeight');
           if (pesoGuardado) setPeso(parseFloat(pesoGuardado));
         }
+      }
+
+      try {
+        const resNivel = await fetchSeguro(`${API_URL}/valoracion`);
+        const dataNivel = await resNivel.json();
+        if (dataNivel.success) setNivelFuncional(dataNivel.nivel);
+      } catch (error) {
+        console.log('No se pudo consultar el nivel funcional:', error);
+      }
+
+      if (userIdGuardado) {
+        // Ejercicios del catálogo permitidos para este usuario (nivel, edad, peso y fuente: RN03 y RN06)
+        try {
+          const resEj = await fetchSeguro(`${API_URL}/exercises/user/${userIdGuardado}`);
+          const dataEj = await resEj.json();
+          setEjerciciosBD(Array.isArray(dataEj.exercises) ? dataEj.exercises : []);
+        } catch (error) {
+          setEjerciciosBD([]);
+        }
+        try {
+          const resRut = await fetchSeguro(`${API_URL}/rutinas`);
+          const dataRut = await resRut.json();
+          setRutinasBD(Array.isArray(dataRut.rutinas) ? dataRut.rutinas : []);
+        } catch (error) {
+          setRutinasBD([]);
+        }
+
+        // Ejercicios completados hoy, para marcar el avance de la rutina del día
+        try {
+          const resHist = await fetchSeguro(`${API_URL}/ejercicio-realizado/${userIdGuardado}`);
+          const dataHist = await resHist.json();
+          const hoy = new Date().toDateString();
+          setHechosHoy((dataHist.historial || [])
+            .filter((h: any) => h.completado && new Date(h.fecha_hora_inicio).toDateString() === hoy)
+            .map((h: any) => (h.nombre_video || '').toLowerCase()));
+        } catch (error) {
+          console.log('No se pudo consultar el historial:', error);
+        }
+      }
+
+      try {
+        const resRec = await fetchSeguro(`${API_URL}/recordatorios`);
+        const dataRec = await resRec.json();
+        if (dataRec.success) setProximoRecordatorio(calcularProximo(dataRec.recordatorios || []));
+      } catch (error) {
+        setProximoRecordatorio(null);
       }
 
       const hydrationGuardado = await AsyncStorage.getItem('userHydration');
@@ -149,13 +239,15 @@ export default function HomeScreen() {
     setCompletadosHoy(0);
     await AsyncStorage.setItem('userStats', JSON.stringify(statsIniciales));
     await AsyncStorage.setItem('completadosHoy', '0');
-    Alert.alert('Progreso reiniciado', 'El contador ha vuelto a cero.');
+    avisar('Progreso reiniciado', 'El contador ha vuelto a cero.');
   };
 
   // Rutinas del día - una diferente por cada día de la semana
   const allRoutines = [
     {
       title: 'RUTINA SUAVE MATUTINA',
+      categoria: 'movilidad',
+      nivel: 1,
       time: '25 min - 5 ejercicios',
       exercises: [
         { name: 'Respiración Diafragmática', duration: '05:00', icon: 'leaf', color: '#1E40AF' },
@@ -167,6 +259,8 @@ export default function HomeScreen() {
     },
     {
       title: 'MOVILIDAD Y EQUILIBRIO',
+      categoria: 'equilibrio',
+      nivel: 2,
       time: '20 min - 4 ejercicios',
       exercises: [
         { name: 'Marcha en el Lugar', duration: '05:00', icon: 'walk', color: '#0F766E' },
@@ -177,6 +271,8 @@ export default function HomeScreen() {
     },
     {
       title: 'FUERZA SUAVE DE BRAZOS',
+      categoria: 'fuerza',
+      nivel: 1,
       time: '20 min - 4 ejercicios',
       exercises: [
         { name: 'Elevación de Brazos', duration: '05:00', icon: 'barbell', color: '#2563EB' },
@@ -187,6 +283,8 @@ export default function HomeScreen() {
     },
     {
       title: 'RELAJACIÓN ACTIVA',
+      categoria: 'relajación',
+      nivel: 1,
       time: '15 min - 3 ejercicios',
       exercises: [
         { name: 'Respiración Profunda', duration: '05:00', icon: 'leaf', color: '#059669' },
@@ -196,6 +294,8 @@ export default function HomeScreen() {
     },
     {
       title: 'CARDIO LIGERO',
+      categoria: 'cardio',
+      nivel: 2,
       time: '20 min - 4 ejercicios',
       exercises: [
         { name: 'Caminata en el Lugar', duration: '05:00', icon: 'walk', color: '#2563EB' },
@@ -206,6 +306,8 @@ export default function HomeScreen() {
     },
     {
       title: 'ARTICULACIONES SANAS',
+      categoria: 'movilidad',
+      nivel: 1,
       time: '25 min - 5 ejercicios',
       exercises: [
         { name: 'Círculos de Muñecas', duration: '05:00', icon: 'refresh', color: '#0891B2' },
@@ -217,6 +319,8 @@ export default function HomeScreen() {
     },
     {
       title: 'PESAS LIGERAS',
+      categoria: 'fuerza',
+      nivel: 2,
       time: '20 min - 4 ejercicios',
       exercises: [
         { name: 'Press de Pesas Ligeras', duration: '05:00', icon: 'barbell', color: '#2563EB' },
@@ -230,74 +334,125 @@ export default function HomeScreen() {
   // Seleccionar rutina del día basada en el día de la semana
   const dayOfWeek = new Date().getDay();
 
-  const hasCondition = (keyword: string) =>
-    userConditions.some((condition) =>
-      condition.toLowerCase().includes(keyword.toLowerCase())
-    );
-
-  const hasHeartCondition = hasCondition('corazón') || hasCondition('corazon') || hasCondition('problemas de corazón') || hasCondition('hipertensión');
-  const hasCancer = hasCondition('cáncer') || hasCondition('cancer');
-  const hasDiabetes = hasCondition('diabetes');
-  const hasHypertension = hasCondition('hipertensión') || hasCondition('hipertension');
-  const hasArthritis = hasCondition('artritis');
-
   const healthConditionNote = userConditions.length
     ? `Rutinas adaptadas a: ${conditionSummary}`
     : 'Registra tus condiciones en Enfermedades para obtener recomendaciones personalizadas.';
 
-  const safeRoutineExcludes = [
-    ...(hasHeartCondition || hasCancer || hasHypertension ? ['CARDIO LIGERO', 'PESAS LIGERAS'] : []),
-    ...(hasArthritis ? ['PESAS LIGERAS'] : [])
-  ];
+  // RN03: solo rutinas del nivel asignado o inferiores; sin nivel conocido se usa el más conservador
+  const nivelPermitido = nivelFuncional ?? 1;
 
-  const safeRoutines = allRoutines.filter(
-    (routine) => !safeRoutineExcludes.includes(routine.title)
+  // Rutinas del administrador (ya filtradas por nivel, edad, peso y RN06 en el backend).
+  // Las rutinas fijas de arriba solo se usan como respaldo mientras no haya ninguna publicada.
+  const rutinasDelAdmin = rutinasBD.map((r: any) => {
+    const minutos = r.ejercicios.reduce((t: number, e: any) => t + (Number(e.duracion_min) || 5), 0);
+    return {
+      title: String(r.titulo).toUpperCase(),
+      categoria: (r.categoria || '').toLowerCase(),
+      nivel: Number(r.nivel_funcional) || 1,
+      time: `${minutos} min - ${r.ejercicios.length} ejercicios`,
+      exercises: r.ejercicios.map((e: any) => ({
+        name: e.nombre_video,
+        duration: `${String(Number(e.duracion_min) || 5).padStart(2, '0')}:00`,
+        icon: iconoCategoria(e.categoria),
+        color: '#2563EB',
+        bd: e,
+      })),
+    };
+  });
+  const rutinasDisponibles: any[] = rutinasDelAdmin.length > 0 ? rutinasDelAdmin : allRoutines;
+  const levelRoutines = rutinasDisponibles.filter((routine) => routine.nivel <= nivelPermitido);
+
+  // Enfermedades: se quitan las rutinas cuya categoría no conviene (mismas reglas que el catálogo)
+  const safeRoutines = levelRoutines.filter(
+    (routine) => !evaluarEjercicio(routine.categoria, userConditions).evitar
   );
 
-  const filteredRoutines = safeRoutines.length > 0 ? safeRoutines : allRoutines;
+  const filteredRoutines = safeRoutines.length > 0 ? safeRoutines : levelRoutines;
 
   const currentWorkout = filteredRoutines[dayOfWeek % filteredRoutines.length];
 
-  // Recomendados: las OTRAS rutinas que NO son la del día
+  // Avance de la rutina del día: ejercicios de la rutina completados hoy según el historial de la BD
+  const ejerciciosHechos = currentWorkout.exercises.filter((ex: any) => hechosHoy.includes(ex.name.toLowerCase())).length;
+  const rutinaCompletada = ejerciciosHechos === currentWorkout.exercises.length;
+
+  // Catálogo de recomendaciones fijas (complementa los ejercicios que carga el administrador)
   const allDiscoveryWorkouts = [
-    { title: 'Zumba Gold Alegre', time: '15 min', intensity: 'Media', icon: 'musical-notes', color: '#BE123C', desc: 'Ritmos latinos divertidos para todos' },
-    { title: 'Baile en Silla', time: '10 min', intensity: 'Baja', icon: 'musical-note', color: '#7C3AED', desc: 'Música y movimiento sin levantarte' },
-    { title: 'Ritmo para el Alma', time: '12 min', intensity: 'Baja', icon: 'heart', color: '#F43F5E', desc: 'Baile suave con canciones clásicas' },
-    { title: 'Despierta tu cuerpo', time: '15 min', intensity: 'Baja', icon: 'sunny', color: '#2563EB', desc: 'Activa tu cuerpo suavemente al despertar' },
-    { title: 'Movilidad en silla', time: '20 min', intensity: 'Baja', icon: 'body', color: '#0D9488', desc: 'Ejercicios sentado para articulaciones' },
-    { title: 'Prevención caídas', time: '10 min', intensity: 'Media', icon: 'shield-checkmark', color: '#D97706', desc: 'Mejora tu equilibrio y estabilidad' },
-    { title: 'Respiración y calma', time: '15 min', intensity: 'Baja', icon: 'leaf', color: '#059669', desc: 'Técnicas de relajación y respiración' },
-    { title: 'Fuerza suave brazos', time: '15 min', intensity: 'Media', icon: 'barbell', color: '#7C3AED', desc: 'Fortalece brazos y hombros sin riesgo' },
-    { title: 'Circulación piernas', time: '20 min', intensity: 'Baja', icon: 'fitness', color: '#BE123C', desc: 'Activa la circulación en tus piernas' },
-    { title: 'Flexibilidad total', time: '15 min', intensity: 'Baja', icon: 'body', color: '#0891B2', desc: 'Estiramientos completos para todo el cuerpo' },
-    { title: 'Postura y columna', time: '10 min', intensity: 'Baja', icon: 'accessibility', color: '#4F46E5', desc: 'Corrige tu postura con ejercicios suaves' },
-    { title: 'Core para mayores', time: '12 min', intensity: 'Media', icon: 'fitness', color: '#0F766E', desc: 'Fortalece tu zona media para mayor estabilidad' },
-    { title: 'Yoga relajante', time: '20 min', intensity: 'Baja', icon: 'leaf', color: '#6D28D9', desc: 'Posturas suaves para relajar mente y cuerpo' },
-    { title: 'Cardio en casa', time: '15 min', intensity: 'Media', icon: 'walk', color: '#2563EB', desc: 'Mejora tu salud cardiovascular sin impacto' },
-    { title: 'Manos y muñecas', time: '10 min', intensity: 'Baja', icon: 'hand-right', color: '#0369A1', desc: 'Ejercicios para mantener la agilidad manual' }
+    { title: 'Zumba Gold Alegre', categoria: 'zumba', time: '15 min', intensity: 'Media', icon: 'musical-notes', color: '#BE123C', desc: 'Ritmos latinos divertidos para todos' },
+    { title: 'Baile en Silla', categoria: 'silla', time: '10 min', intensity: 'Baja', icon: 'musical-note', color: '#7C3AED', desc: 'Música y movimiento sin levantarte' },
+    { title: 'Ritmo para el Alma', categoria: 'baile', time: '12 min', intensity: 'Baja', icon: 'heart', color: '#F43F5E', desc: 'Baile suave con canciones clásicas' },
+    { title: 'Despierta tu cuerpo', categoria: 'movilidad', time: '15 min', intensity: 'Baja', icon: 'sunny', color: '#2563EB', desc: 'Activa tu cuerpo suavemente al despertar' },
+    { title: 'Movilidad en silla', categoria: 'silla', time: '20 min', intensity: 'Baja', icon: 'body', color: '#0D9488', desc: 'Ejercicios sentado para articulaciones' },
+    { title: 'Prevención caídas', categoria: 'equilibrio', time: '10 min', intensity: 'Media', icon: 'shield-checkmark', color: '#D97706', desc: 'Mejora tu equilibrio y estabilidad' },
+    { title: 'Respiración y calma', categoria: 'respiración', time: '15 min', intensity: 'Baja', icon: 'leaf', color: '#059669', desc: 'Técnicas de relajación y respiración' },
+    { title: 'Fuerza suave brazos', categoria: 'fuerza', time: '15 min', intensity: 'Media', icon: 'barbell', color: '#7C3AED', desc: 'Fortalece brazos y hombros sin riesgo' },
+    { title: 'Circulación piernas', categoria: 'movilidad', time: '20 min', intensity: 'Baja', icon: 'fitness', color: '#BE123C', desc: 'Activa la circulación en tus piernas' },
+    { title: 'Flexibilidad total', categoria: 'flexibilidad', time: '15 min', intensity: 'Baja', icon: 'body', color: '#0891B2', desc: 'Estiramientos completos para todo el cuerpo' },
+    { title: 'Postura y columna', categoria: 'movilidad', time: '10 min', intensity: 'Baja', icon: 'accessibility', color: '#4F46E5', desc: 'Corrige tu postura con ejercicios suaves' },
+    { title: 'Core para mayores', categoria: 'fuerza', time: '12 min', intensity: 'Media', icon: 'fitness', color: '#0F766E', desc: 'Fortalece tu zona media para mayor estabilidad' },
+    { title: 'Yoga relajante', categoria: 'flexibilidad', time: '20 min', intensity: 'Baja', icon: 'leaf', color: '#6D28D9', desc: 'Posturas suaves para relajar mente y cuerpo' },
+    { title: 'Cardio en casa', categoria: 'cardio', time: '15 min', intensity: 'Media', icon: 'walk', color: '#2563EB', desc: 'Mejora tu salud cardiovascular sin impacto' },
+    { title: 'Manos y muñecas', categoria: 'movilidad', time: '10 min', intensity: 'Baja', icon: 'hand-right', color: '#0369A1', desc: 'Ejercicios para mantener la agilidad manual' }
   ];
 
-  // Rotar recomendados para que sean distintos cada día
-  const startIdx = (dayOfWeek * 3) % allDiscoveryWorkouts.length;
-  const discoveryWorkouts = [
-    ...allDiscoveryWorkouts.slice(startIdx),
-    ...allDiscoveryWorkouts.slice(0, startIdx)
-  ].slice(0, 4);
+  const nivelDeIntensidad = (intensidad: string) => (intensidad === 'Alta' ? 3 : intensidad === 'Media' ? 2 : 1);
+  const intensidadDe = (dificultad: string) => {
+    const d = (dificultad || '').toLowerCase();
+    return d === 'alta' ? 'Alta' : d === 'media' ? 'Media' : 'Baja';
+  };
 
-  const discoveryWorkoutsToShow = discoveryWorkouts.filter((workout) => {
-    if (hasHeartCondition || hasHypertension || hasCancer) {
-      return workout.intensity === 'Baja';
-    }
-    if (hasArthritis) {
-      return workout.intensity === 'Baja' && workout.icon !== 'barbell' && workout.icon !== 'fitness';
-    }
-    if (hasDiabetes) {
-      return workout.intensity !== 'Media' ? true : workout.icon !== 'walk';
-    }
-    return true;
-  });
+  // Desempate que cambia cada día (los recomendados rotan, pero no al recargar la pantalla)
+  const semillaDia = new Date().toDateString();
+  const desempate = (texto: string) => {
+    let h = 0;
+    for (const ch of texto + semillaDia) h = (h * 31 + ch.charCodeAt(0)) | 0;
+    return (Math.abs(h) % 1000) / 1000;
+  };
 
-  const recommendedWorkouts = discoveryWorkoutsToShow.length > 0 ? discoveryWorkoutsToShow : discoveryWorkouts;
+  // Recomendados según el perfil:
+  //  - nivel funcional (RN03) y condiciones de salud (se excluye lo no recomendado)
+  //  - se priorizan los ejercicios que benefician alguna condición del usuario,
+  //    los del catálogo con fuente documental (cargados por el admin) y, a partir de 75 años, equilibrio
+  const candidatos: Recomendado[] = [
+    ...ejerciciosBD.map((e: any): Recomendado => ({
+      title: e.nombre_video,
+      categoria: (e.categoria || '').toLowerCase(),
+      time: `${e.duracion_min || 5} min`,
+      intensity: intensidadDe(e.dificultad),
+      nivel: Number(e.nivel_funcional) || 1,
+      icon: iconoCategoria(e.categoria),
+      color: '#2563EB',
+      desc: e.descripcion || '',
+      bd: e,
+    })),
+    ...allDiscoveryWorkouts.map((w): Recomendado => ({ ...w, nivel: nivelDeIntensidad(w.intensity) })),
+  ];
+
+  // La lista fija solo rellena: si hay al menos 4 ejercicios publicados por el admin, se usan solo esos
+  const recomendadosBD = candidatos.filter((w) => w.bd && w.nivel <= nivelPermitido && !evaluarEjercicio(w.categoria, userConditions).evitar);
+  const recommendedWorkouts = candidatos
+    .filter((w) => recomendadosBD.length < 4 || w.bd)
+    .filter((w) => w.nivel <= nivelPermitido)
+    .map((w) => {
+      const { evitar, motivo } = evaluarEjercicio(w.categoria, userConditions);
+      const porEdad = edadUsuario !== null && edadUsuario >= 75 && ['equilibrio', 'silla'].includes(w.categoria);
+      // Lo que ya está en la rutina de hoy va al final, para que los recomendados aporten algo distinto
+      const enRutinaHoy = currentWorkout.exercises.some((ex: any) => ex.name === w.title);
+      const puntos = (motivo ? 3 : 0) + (w.bd ? 2 : 0) + (porEdad ? 1 : 0) + (w.nivel === nivelPermitido ? 0.5 : 0) - (enRutinaHoy ? 4 : 0) + desempate(w.title);
+      const razon = motivo || (porEdad ? 'Previene caídas' : w.bd ? 'Con respaldo profesional' : `Para tu nivel ${nivelPermitido}`);
+      return { ...w, evitar, razon, puntos };
+    })
+    .filter((w) => !w.evitar)
+    .sort((a, b) => b.puntos - a.puntos)
+    .slice(0, 4);
+
+  // Diversión con Ritmo: baile, con los mismos filtros de nivel y condiciones
+  // Si el admin publicó ejercicios de Zumba o Baile, se usan esos; si no, los fijos
+  const bailesBD = candidatos.filter((w) => w.bd && ['zumba', 'baile'].includes(w.categoria));
+  const funWorkouts = (bailesBD.length > 0
+    ? bailesBD
+    : allDiscoveryWorkouts.filter((w) => w.icon.includes('musical') || w.icon === 'heart'))
+    .filter((w: any) => (w.bd ? Number(w.bd.nivel_funcional) || 1 : nivelDeIntensidad(w.intensity)) <= nivelPermitido)
+    .filter((w: any) => !evaluarEjercicio(w.categoria, userConditions).evitar);
 
   // Calendario dinámico basado en la semana actual
   const today = new Date();
@@ -317,27 +472,37 @@ export default function HomeScreen() {
   const irAEstadisticas = () => router.push('/estadisticas');
   const irAPerfil = () => router.push('/perfil');
 
-  const iniciarEntrenamiento = async () => {
-    const primerEjercicio = currentWorkout.exercises[0];
+  // Datos de cada ejercicio de la rutina para el reproductor: los del admin llevan su propio
+  // video, fuente y contraindicaciones; los de respaldo usan el video elegido por nombre
+  const datosEjercicioRutina = (ex: any) => ex.bd
+    ? {
+        name: ex.name,
+        url: ex.bd.link_video || getVideoIdForExercise(ex.name),
+        id_video: String(ex.bd.id_video),
+        fuente: ex.bd.fuente_documental || '',
+        contraindicaciones: ex.bd.contraindicaciones || '',
+        duracion: String((Number(ex.bd.duracion_min) || 5) * 60),
+      }
+    : { name: ex.name, url: getVideoIdForExercise(ex.name), duracion: '300' };
 
-    const rutineConVideos = {
-      ...currentWorkout,
-      exercises: currentWorkout.exercises.map((ex: any) => ({
-        ...ex,
-        url: getVideoIdForExercise(ex.name)
-      }))
-    };
+  const iniciarEntrenamiento = async () => {
+    const ejercicios = currentWorkout.exercises.map(datosEjercicioRutina);
+    const primero = ejercicios[0];
+    const rutinaParaReproductor = { title: currentWorkout.title, exercises: ejercicios };
 
     router.push({
       pathname: '/detalle-ejercicio',
       params: {
         id: userId ?? '',                          // id_usuario real de la BD
-        nombre: primerEjercicio.name,
+        nombre: primero.name,
         descripcion: `Parte de la rutina: ${currentWorkout.title}`,
-        duracion: '300',
+        duracion: primero.duracion,
         dificultad: 'Fácil',
-        url: encodeURIComponent(getVideoIdForExercise(primerEjercicio.name)),
-        routine: JSON.stringify(rutineConVideos),
+        url: encodeURIComponent(primero.url),
+        id_video: primero.id_video ?? '',
+        fuente: primero.fuente ?? '',
+        contraindicaciones: primero.contraindicaciones ?? '',
+        routine: JSON.stringify(rutinaParaReproductor),
         index: '0'
       }
     });
@@ -346,6 +511,10 @@ export default function HomeScreen() {
 
 
   const verDetalleEjercicio = (ejercicio: any) => {
+    if (ejercicio.bd) {
+      verDetalleWorkout({ bd: ejercicio.bd });
+      return;
+    }
     router.push({
       pathname: '/detalle-ejercicio',
       params: {
@@ -359,6 +528,25 @@ export default function HomeScreen() {
   };
 
   const verDetalleWorkout = (workout: any) => {
+    if (workout.bd) {
+      // Ejercicio del catálogo: se abre con su propio video, contraindicaciones y fuente
+      const e = workout.bd;
+      router.push({
+        pathname: '/detalle-ejercicio',
+        params: {
+          id: String(e.id_video),
+          nombre: e.nombre_video,
+          descripcion: e.descripcion || 'Sin descripción',
+          duracion: String((e.duracion_min || 5) * 60),
+          dificultad: e.dificultad,
+          url: encodeURIComponent(e.link_video || ''),
+          id_video: String(e.id_video),
+          contraindicaciones: e.contraindicaciones || '',
+          fuente: e.fuente_documental || ''
+        }
+      });
+      return;
+    }
     router.push({
       pathname: '/detalle-ejercicio',
       params: {
@@ -384,6 +572,7 @@ export default function HomeScreen() {
         AsyncStorage.removeItem('userStats'),
         AsyncStorage.removeItem('completadosHoy'),
         AsyncStorage.removeItem('userHydration'),
+        AsyncStorage.removeItem('userConditions'),
         AsyncStorage.removeItem('jwtToken'),
         AsyncStorage.removeItem('csrfToken')
       ]);
@@ -611,6 +800,17 @@ export default function HomeScreen() {
           </View>
         </View>
 
+        {nivelFuncional === 0 ? (
+        <View style={[styles.healthInfoCard, { backgroundColor: colors.isDark ? '#451a03' : '#FFFBEB', borderColor: '#FCD34D' }]}>
+          <Text style={[styles.healthInfoText, { color: colors.text, fontSize: 19 }]}>
+            Por tu valoración, consulta a tu médico antes de hacer ejercicio. Cuando te autorice, repite la valoración para ver tus rutinas.
+          </Text>
+          <TouchableOpacity onPress={() => router.push('/valoracion')} style={{ marginTop: 12, minHeight: 56, justifyContent: 'center' }}>
+            <Text style={[styles.seeAllText, { fontSize: 19 }]}>Repetir la valoración</Text>
+          </TouchableOpacity>
+        </View>
+        ) : (
+        <>
         {/* Sección Descubre */}
         <View style={[styles.discoverSection, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}>
           <View style={styles.sectionHeader}>
@@ -619,7 +819,9 @@ export default function HomeScreen() {
               <Text style={styles.seeAllText}>Ver todos</Text>
             </TouchableOpacity>
           </View>
-          <Text style={[styles.sectionSubtitle, { color: colors.textSecondary }]}>Rutinas adaptadas a tu ritmo</Text>
+          <Text style={[styles.sectionSubtitle, { color: colors.textSecondary }]}>
+            {`Según tu nivel ${nivelPermitido}${edadUsuario !== null ? `, tu edad (${edadUsuario})` : ''}${userConditions.length ? ` y: ${conditionSummary}` : ''}`}
+          </Text>
           
           <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.discoverScroll}>
             {recommendedWorkouts.map((workout, index) => (
@@ -634,6 +836,10 @@ export default function HomeScreen() {
                 </View>
                 <View style={styles.discoverCardBody}>
                   <Text style={[styles.cardTitle, { color: colors.text }]} numberOfLines={2}>{workout.title}</Text>
+                  <View style={styles.razonRow}>
+                    <Ionicons name="checkmark-circle" size={16} color="#059669" />
+                    <Text style={styles.razonText} numberOfLines={1}>{workout.razon}</Text>
+                  </View>
                   <View style={styles.cardInfoRow}>
                     <View style={styles.cardTimeBadge}>
                       <Ionicons name="time-outline" size={16} color={colors.textSecondary} />
@@ -649,7 +855,8 @@ export default function HomeScreen() {
           </ScrollView>
         </View>
 
-        {/* Sección Diversión con Ritmo - NUEVO */}
+        {/* Sección Diversión con Ritmo: con los mismos filtros de nivel y condiciones */}
+        {funWorkouts.length > 0 && (
         <View style={[styles.funSection, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}>
             <View style={[styles.sectionHeader, { paddingHorizontal: 24 }]}>
                 <Text style={[styles.sectionTitle, { color: colors.text }]}>¡Diversión con Ritmo! 💃</Text>
@@ -662,7 +869,7 @@ export default function HomeScreen() {
                 style={styles.discoverScroll}
                 contentContainerStyle={styles.funScrollContent}
             >
-                {allDiscoveryWorkouts.filter(w => w.icon.includes('musical') || w.icon === 'heart').map((workout, index) => (
+                {funWorkouts.map((workout, index) => (
                     <TouchableOpacity 
                         key={index} 
                         style={[styles.funCard, { backgroundColor: colors.card, borderColor: colors.cardBorder }]} 
@@ -685,6 +892,7 @@ export default function HomeScreen() {
                 ))}
             </ScrollView>
         </View>
+        )}
 
         {/* Información de salud */}
         <View style={[styles.healthInfoCard, { backgroundColor: colors.isDark ? '#111827' : '#E0F2FE', borderColor: colors.cardBorder }]}> 
@@ -695,13 +903,20 @@ export default function HomeScreen() {
         <View style={[styles.todayWorkout, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}>
           <View style={styles.workoutHeader}>
             <Text style={[styles.workoutTitle, { color: colors.text }]}>{currentWorkout.title}</Text>
-            <View style={[styles.workoutBadge, colors.isDark && { backgroundColor: '#1E3A8A' }]}>
-              <Ionicons name="time" size={16} color="#60A5FA" />
-              <Text style={styles.workoutInfo}>{currentWorkout.time}</Text>
-            </View>
+            {rutinaCompletada ? (
+              <View style={[styles.workoutBadge, styles.badgeCompletada]}>
+                <Ionicons name="checkmark-circle" size={16} color="#FFFFFF" />
+                <Text style={[styles.workoutInfo, { color: '#FFFFFF' }]}>Completada hoy</Text>
+              </View>
+            ) : (
+              <View style={[styles.workoutBadge, colors.isDark && { backgroundColor: '#1E3A8A' }]}>
+                <Ionicons name="time" size={16} color="#60A5FA" />
+                <Text style={styles.workoutInfo}>{currentWorkout.time}</Text>
+              </View>
+            )}
           </View>
           
-          {currentWorkout.exercises.map((exercise, index) => (
+          {currentWorkout.exercises.map((exercise: any, index: number) => (
             <TouchableOpacity 
               key={index} 
               style={[styles.exerciseItem, { borderBottomColor: colors.isDark ? '#334155' : '#F1F5F9' }]}
@@ -713,9 +928,17 @@ export default function HomeScreen() {
               </View>
               <View style={styles.exerciseInfo}>
                 <Text style={[styles.exerciseName, { color: colors.text }]}>{exercise.name}</Text>
-                <Text style={[styles.exerciseDetail, { color: colors.textSecondary }]}>{exercise.duration}</Text>
+                {hechosHoy.includes(exercise.name.toLowerCase()) ? (
+                  <Text style={[styles.exerciseDetail, styles.hechoText]}>✓ Hecho hoy</Text>
+                ) : (
+                  <Text style={[styles.exerciseDetail, { color: colors.textSecondary }]}>{exercise.duration}</Text>
+                )}
               </View>
-              <Ionicons name="chevron-forward-circle" size={32} color={colors.isDark ? '#475569' : '#CBD5E1'} />
+              {hechosHoy.includes(exercise.name.toLowerCase()) ? (
+                <Ionicons name="checkmark-circle" size={32} color="#059669" />
+              ) : (
+                <Ionicons name="chevron-forward-circle" size={32} color={colors.isDark ? '#475569' : '#CBD5E1'} />
+              )}
             </TouchableOpacity>
           ))}
           
@@ -725,14 +948,27 @@ export default function HomeScreen() {
             onPress={iniciarEntrenamiento}
           >
             <LinearGradient
-              colors={['#059669', '#10B981']}
+              colors={rutinaCompletada ? ['#64748B', '#94A3B8'] : ['#059669', '#10B981']}
               style={styles.gradientButton}
             >
-              <Ionicons name="play" size={28} color="#fff" />
-              <Text style={styles.workoutStartText}>Iniciar Rutina Completa</Text>
+              <Ionicons name={rutinaCompletada ? 'refresh' : 'play'} size={28} color="#fff" />
+              <Text style={styles.workoutStartText}>{rutinaCompletada ? 'Repetir la rutina' : 'Iniciar Rutina Completa'}</Text>
             </LinearGradient>
           </TouchableOpacity>
+          {rutinaCompletada ? (
+            <View style={styles.rutinaListaBox}>
+              <Text style={styles.rutinaListaTitulo}>🎉 ¡Cumpliste la rutina de hoy!</Text>
+              <Text style={styles.rutinaListaTexto}>Mañana tendrás una rutina nueva. Si lo deseas, puedes repetirla o elegir un ejercicio recomendado.</Text>
+            </View>
+          ) : ejerciciosHechos > 0 ? (
+            <Text style={[styles.rutinaAvance, { color: colors.textSecondary }]}>
+              Llevas {ejerciciosHechos} de {currentWorkout.exercises.length} ejercicios de hoy
+            </Text>
+          ) : null}
         </View>
+
+        </>
+        )}
 
         {/* Centro de Bienestar - UNIFICADO Y ÚTIL PARA ADULTOS MAYORES */}
         <View style={[styles.wellnessSection, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}>
@@ -762,16 +998,18 @@ export default function HomeScreen() {
                     </View>
                 </View>
 
-                {/* Recordatorios de Salud */}
+                {/* Recordatorios de ejercicio (RF13); no es un módulo de medicamentos */}
                 <TouchableOpacity 
                     style={[styles.wellnessItem, { backgroundColor: colors.isDark ? '#1E293B' : '#FEF2F2' }]}
                     onPress={() => router.push('/recordatorios')}
                 >
-                    <Ionicons name="notifications-circle" size={32} color="#EF4444" />
-                    <Text style={[styles.wellnessValue, { color: colors.text }]}>Ver</Text>
-                    <Text style={[styles.wellnessLabel, { color: colors.textSecondary }]}>Medicinas</Text>
+                    <Ionicons name="alarm" size={32} color="#EF4444" />
+                    <Text style={[styles.wellnessValue, { color: colors.text, fontSize: proximoRecordatorio ? 16 : 20 }]} numberOfLines={1}>
+                        {proximoRecordatorio || 'Sin horario'}
+                    </Text>
+                    <Text style={[styles.wellnessLabel, { color: colors.textSecondary }]}>Próximo ejercicio</Text>
                     <View style={[styles.miniBtn, { marginTop: 10, width: '80%' }]}>
-                        <Text style={{ fontSize: 10, fontWeight: '800', color: '#EF4444' }}>ABRIR</Text>
+                        <Text style={{ fontSize: 11, fontWeight: '800', color: '#EF4444' }}>HORARIOS</Text>
                     </View>
                 </TouchableOpacity>
 
@@ -986,7 +1224,7 @@ const styles = StyleSheet.create({
     }),
     borderWidth: 1, borderColor: '#E2E8F0'
   },
-  sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
+  sectionHeader: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8, gap: 8 },
   sectionTitle: { fontSize: 24, fontWeight: '900', color: '#1E293B' },
   seeAllText: { fontSize: 16, color: '#2563EB', fontWeight: '700' },
   sectionSubtitle: { fontSize: 16, color: '#64748B', fontWeight: '500', marginBottom: 20 },
@@ -998,7 +1236,15 @@ const styles = StyleSheet.create({
   discoverCardHeader: { height: 90, justifyContent: 'center', alignItems: 'center' },
   cardEmoji: { fontSize: 48 },
   discoverCardBody: { padding: 16 },
-  cardTitle: { fontSize: 18, fontWeight: '800', color: '#1E293B', marginBottom: 12, height: 46 },
+  cardTitle: { fontSize: 18, fontWeight: '800', color: '#1E293B', marginBottom: 6, height: 46 },
+  razonRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 10 },
+  razonText: { fontSize: 14, fontWeight: '700', color: '#059669', flexShrink: 1 },
+  badgeCompletada: { backgroundColor: '#059669' },
+  hechoText: { color: '#059669', fontWeight: '800' },
+  rutinaAvance: { fontSize: 16, fontWeight: '600', textAlign: 'center', marginTop: 12 },
+  rutinaListaBox: { marginTop: 14, padding: 16, borderRadius: 16, backgroundColor: '#ECFDF5', borderWidth: 1, borderColor: '#6EE7B7' },
+  rutinaListaTitulo: { fontSize: 18, fontWeight: '800', color: '#065F46', marginBottom: 4 },
+  rutinaListaTexto: { fontSize: 15, color: '#065F46', lineHeight: 21 },
   cardInfoRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   cardTimeBadge: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   cardTime: { fontSize: 14, color: '#64748B', fontWeight: '600' },
@@ -1022,9 +1268,9 @@ const styles = StyleSheet.create({
     }),
     borderWidth: 1, borderColor: '#E2E8F0'
   },
-  workoutHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
-  workoutTitle: { fontSize: 22, fontWeight: '900', color: '#1E293B', flex: 1 },
-  workoutBadge: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#EFF6FF', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 16, gap: 6, marginLeft: 12 },
+  workoutHeader: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20, rowGap: 8, columnGap: 12 },
+  workoutTitle: { fontSize: 22, fontWeight: '900', color: '#1E293B', flexGrow: 1, flexShrink: 1, minWidth: 160 },
+  workoutBadge: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#EFF6FF', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 16, gap: 6 },
   workoutInfo: { fontSize: 14, color: '#2563EB', fontWeight: '700' },
   exerciseItem: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
@@ -1105,11 +1351,11 @@ const styles = StyleSheet.create({
     padding: 24, marginHorizontal: 20, marginBottom: 16, borderRadius: 24,
     borderWidth: 1,
   },
-  wellnessHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
+  wellnessHeader: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20, rowGap: 8 },
   wellnessTitleGroup: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   wellnessTitle: { fontSize: 20, fontWeight: '800' },
-  wellnessGrid: { flexDirection: 'row', gap: 12, justifyContent: 'space-between' },
-  wellnessItem: { flex: 1, padding: 16, borderRadius: 20, alignItems: 'center', gap: 4 },
+  wellnessGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12, justifyContent: 'space-between' },
+  wellnessItem: { flexGrow: 1, flexBasis: 90, padding: 12, borderRadius: 20, alignItems: 'center', gap: 4 },
   wellnessValue: { fontSize: 18, fontWeight: '900', marginTop: 4 },
   wellnessLabel: { fontSize: 13, fontWeight: '700', textAlign: 'center' },
   wellnessControls: { flexDirection: 'row', gap: 8, marginTop: 8 },

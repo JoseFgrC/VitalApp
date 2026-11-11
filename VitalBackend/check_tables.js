@@ -7,7 +7,7 @@ async function test() {
       host: process.env.DB_HOST || 'localhost',
       user: process.env.DB_USER || 'root',
       password: process.env.DB_PASSWORD || '',
-      database: process.env.DB_NAME || 'vitalapp_db'
+      database: process.env.DB_NAME || 'vitalapp'
     });
     console.log('✅ Connection successful');
     const [rows] = await connection.query('SHOW TABLES');

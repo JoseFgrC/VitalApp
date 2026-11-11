@@ -17,7 +17,9 @@ import MenuInferior from '../components/MenuInferior';
 import { useTheme } from '../hooks/useTheme';
 import { API_URL } from '../constants/config';
 import { fetchSeguro } from '../utils/api';
+import { cargarCondiciones as cargarCondicionesUsuario } from '../utils/condiciones';
 
+import { avisar } from '../utils/dialogos';
 const CONDITION_OPTIONS = [
   'Diabetes',
   'Hipertensión',
@@ -44,17 +46,10 @@ export default function EnfermedadesScreen() {
   const cargarCondiciones = async () => {
     setLoading(true);
     try {
-      const condicionesGuardadas = await AsyncStorage.getItem('userConditions');
       const idUsuario = await AsyncStorage.getItem('userId');
       setUserId(idUsuario);
-
-      if (condicionesGuardadas) {
-        const parsed = JSON.parse(condicionesGuardadas);
-        const condiciones = Array.isArray(parsed) ? parsed : [];
-        setSelectedConditions(condiciones);
-      } else {
-        setSelectedConditions([]);
-      }
+      // Se leen de la BD para mostrar las condiciones de esta cuenta (no las de otra sesión)
+      setSelectedConditions(await cargarCondicionesUsuario());
     } catch (error) {
       console.log('Error cargando condiciones:', error);
     } finally {
@@ -87,11 +82,17 @@ export default function EnfermedadesScreen() {
       await AsyncStorage.setItem('userConditions', JSON.stringify(condiciones));
       if (userId) {
         try {
-          await fetchSeguro(`${API_URL}/user/${userId}`, {
+          const res = await fetchSeguro(`${API_URL}/user/${userId}`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ condiciones_medicas: condiciones.join(', ') })
           });
+          const data = await res.json();
+          // RN01: sin consentimiento el backend no guarda datos de salud
+          if (!data.success) {
+            avisar('No se guardó', data.message || 'No se pudieron guardar tus condiciones.');
+            return;
+          }
         } catch (error) {
           console.log('No se pudo sincronizar condiciones con el backend:', error);
         }
@@ -108,7 +109,7 @@ export default function EnfermedadesScreen() {
       }
     } catch (error) {
       console.log('Error guardando condiciones:', error);
-      Alert.alert('Error', 'No se pudieron guardar tus condiciones. Intenta de nuevo.');
+      avisar('Error', 'No se pudieron guardar tus condiciones. Intenta de nuevo.');
     }
   };
 

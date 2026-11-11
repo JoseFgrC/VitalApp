@@ -25,6 +25,7 @@ import { fetchSeguro } from '../utils/api';
 import { useTheme } from '../hooks/useTheme';
 
 
+import { avisar } from '../utils/dialogos';
 export default function PerfilScreen() {
     const router = useRouter();
     const [editando, setEditando] = useState(false);
@@ -190,6 +191,7 @@ export default function PerfilScreen() {
                 await AsyncStorage.removeItem('userEmail');
                 await AsyncStorage.removeItem('userAge');
                 await AsyncStorage.removeItem('userRol');
+                await AsyncStorage.removeItem('userConditions');
                 router.replace('/login');
             }
         } else {
@@ -210,6 +212,7 @@ export default function PerfilScreen() {
                             await AsyncStorage.removeItem('userEmail');
                             await AsyncStorage.removeItem('userAge');
                             await AsyncStorage.removeItem('userRol');
+                await AsyncStorage.removeItem('userConditions');
                             router.replace('/login');
                         }
                     }
@@ -220,7 +223,7 @@ export default function PerfilScreen() {
 
     const handleSetupMfa = async () => {
         if (mfaEnabled) {
-            Alert.alert("Aviso", "La seguridad de 2 pasos ya está activada.");
+            avisar("Aviso", "La seguridad de 2 pasos ya está activada.");
             return;
         }
         setMfaLoading(true);
@@ -236,10 +239,10 @@ export default function PerfilScreen() {
                 setMfaSecret(data.secret);
                 setMfaModalVisible(true);
             } else {
-                Alert.alert("Error", data.message || "No se pudo iniciar la configuración.");
+                avisar("Error", data.message || "No se pudo iniciar la configuración.");
             }
         } catch (error: any) {
-            Alert.alert("Error", error.message);
+            avisar("Error", error.message);
         } finally {
             setMfaLoading(false);
         }
@@ -247,7 +250,7 @@ export default function PerfilScreen() {
 
     const handleVerifyMfa = async () => {
         if (!mfaTokenInput || mfaTokenInput.length !== 6) {
-            Alert.alert("Error", "Ingresa un código válido de 6 dígitos.");
+            avisar("Error", "Ingresa un código válido de 6 dígitos.");
             return;
         }
         setMfaLoading(true);
@@ -262,12 +265,12 @@ export default function PerfilScreen() {
                 setMfaEnabled(true);
                 setMfaModalVisible(false);
                 setMfaTokenInput('');
-                Alert.alert("¡Éxito!", "La seguridad de 2 pasos se activó correctamente.");
+                avisar("¡Éxito!", "La seguridad de 2 pasos se activó correctamente.");
             } else {
-                Alert.alert("Error", data.message || "Código incorrecto.");
+                avisar("Error", data.message || "Código incorrecto.");
             }
         } catch (error: any) {
-            Alert.alert("Error", error.message);
+            avisar("Error", error.message);
         } finally {
             setMfaLoading(false);
         }
@@ -310,7 +313,7 @@ export default function PerfilScreen() {
                 if (Platform.OS === 'web') {
                     window.alert("La seguridad de 2 pasos ha sido desactivada.");
                 } else {
-                    Alert.alert("MFA Desactivado", "La seguridad de 2 pasos ha sido desactivada.");
+                    avisar("MFA Desactivado", "La seguridad de 2 pasos ha sido desactivada.");
                 }
                 console.log("MFA desactivado con éxito");
             } else {
@@ -318,7 +321,7 @@ export default function PerfilScreen() {
                 if (Platform.OS === 'web') {
                     window.alert("Error: " + errorMsg);
                 } else {
-                    Alert.alert("Error", errorMsg);
+                    avisar("Error", errorMsg);
                 }
                 console.log("Error del servidor al desactivar:", errorMsg);
             }
@@ -327,7 +330,7 @@ export default function PerfilScreen() {
             if (Platform.OS === 'web') {
                 window.alert("Error: " + error.message);
             } else {
-                Alert.alert("Error", error.message);
+                avisar("Error", error.message);
             }
         } finally {
             setMfaLoading(false);
@@ -591,7 +594,7 @@ export default function PerfilScreen() {
                     </TouchableOpacity>
 
                     <TouchableOpacity
-                        style={[styles.settingItem, { borderBottomWidth: 0 }]}
+                        style={styles.settingItem}
                         onPress={() => router.push('/recordatorios')}
                         activeOpacity={0.7}
                     >
@@ -599,6 +602,18 @@ export default function PerfilScreen() {
                             <Ionicons name="alarm" size={24} color="#D97706" />
                         </View>
                         <Text style={[styles.settingText, { color: colors.text }]}>Recordatorios de Ejercicio</Text>
+                        <Ionicons name="chevron-forward" size={24} color={colors.textSecondary} />
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                        style={[styles.settingItem, { borderBottomWidth: 0 }]}
+                        onPress={() => router.push('/mis-datos')}
+                        activeOpacity={0.7}
+                    >
+                        <View style={[styles.settingIcon, { backgroundColor: temaOscuro ? '#064E3B' : '#DCFCE7' }]}>
+                            <Ionicons name="people" size={24} color="#059669" />
+                        </View>
+                        <Text style={[styles.settingText, { color: colors.text }]}>Privacidad y cuidadores</Text>
                         <Ionicons name="chevron-forward" size={24} color={colors.textSecondary} />
                     </TouchableOpacity>
                 </View>

@@ -7,7 +7,6 @@ import {
     TouchableOpacity,
     SafeAreaView,
     Dimensions,
-    Alert,
     Modal,
     ActivityIndicator,
     StatusBar,
@@ -21,9 +20,93 @@ import { LinearGradient } from 'expo-linear-gradient';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useTheme } from '../hooks/useTheme';
 import VideoPlayer from '../components/VideoPlayer';
+import * as Speech from 'expo-speech';
 import { getVideoIdForExercise } from '../constants/exercises';
+import { API_URL } from '../constants/config';
+import { fetchSeguro } from '../utils/api';
+import { avisar } from '../utils/dialogos';
+
+// Señales de alarma para detener el ejercicio (Capítulo 2, ejercicio terapéutico multicomponente)
+const SENALES_ALARMA = [
+    'Dolor o presión en el pecho',
+    'Mareo o sensación de desmayo',
+    'Falta de aire fuera de lo normal',
+    'Dolor fuerte en una articulación',
+    'Latidos muy rápidos o irregulares',
+    'Cansancio extremo',
+];
+
+// Escala de esfuerzo percibido de Borg simplificada 0–10 (RD04)
+const ESCALA_ESFUERZO = [
+    { valor: 0, texto: 'Nada' }, { valor: 1, texto: 'Muy ligero' }, { valor: 2, texto: 'Muy ligero' },
+    { valor: 3, texto: 'Ligero' }, { valor: 4, texto: 'Ligero' }, { valor: 5, texto: 'Moderado' },
+    { valor: 6, texto: 'Moderado' }, { valor: 7, texto: 'Fuerte' }, { valor: 8, texto: 'Fuerte' },
+    { valor: 9, texto: 'Muy fuerte' }, { valor: 10, texto: 'Máximo' },
+];
 
 const { width } = Dimensions.get('window');
+
+// Instrucciones paso a paso según el tipo de ejercicio; se muestran en texto y se leen en voz alta
+function obtenerPasos(nombre: string): string[] {
+    const n = (nombre || '').toLowerCase();
+    let pasos = [
+        'Busca un espacio cómodo y seguro donde puedas moverte sin obstáculos.',
+        'Sigue los movimientos del instructor en el video a tu propio ritmo.',
+        'Respira profundamente y no contengas la respiración.',
+        'Si sientes fatiga extrema, pausa el video y descansa.'
+    ];
+    if (n.includes('respiraci') || n.includes('diafragm') || n.includes('meditaci')) {
+        pasos = [
+            'Siéntate cómodamente con la espalda recta y los pies apoyados en el suelo.',
+            'Inhala lentamente por la nariz durante 4 segundos, llenando el abdomen.',
+            'Mantén el aire 2 segundos y exhala suavemente por la boca durante 6 segundos.',
+            'Repite el ciclo sin forzar. La calma llega con la práctica constante.'
+        ];
+    } else if (n.includes('hombro') || n.includes('círculo') || n.includes('circulo') || n.includes('cuello')) {
+        pasos = [
+            'Siéntate o párate con la espalda recta y los hombros relajados.',
+            'Realiza círculos lentos con los hombros hacia atrás, luego hacia adelante.',
+            'Mueve la cabeza suavemente de lado a lado sin forzar el cuello.',
+            'Si sientes tensión excesiva, reduce el rango de movimiento.'
+        ];
+    } else if (n.includes('estiramiento') || n.includes('lateral') || n.includes('espalda') || n.includes('relaj')) {
+        pasos = [
+            'Colócate en una posición cómoda, de pie o sentado.',
+            'Realiza el estiramiento suavemente, sin rebotes ni movimientos bruscos.',
+            'Mantén cada posición entre 15 y 30 segundos respirando con calma.',
+            'Nunca estires hasta sentir dolor; la sensación debe ser de tensión leve.'
+        ];
+    } else if (n.includes('caminata') || n.includes('marcha') || n.includes('paso') || n.includes('tobillo')) {
+        pasos = [
+            'Párate cerca de una silla o pared por si necesitas apoyo.',
+            'Levanta las rodillas de forma alternada a un ritmo cómodo para ti.',
+            'Mantén la espalda erguida y los brazos moviéndose con naturalidad.',
+            'Regula tu velocidad según tu nivel de energía del día.'
+        ];
+    } else if (n.includes('equilibrio') || n.includes('sentadilla')) {
+        pasos = [
+            'Párate frente a una silla robusta que puedas sujetar si pierdes el equilibrio.',
+            'Levanta un pie lentamente y mantén la posición el mayor tiempo posible.',
+            'Cambia de pie y repite. Con el tiempo irás mejorando la estabilidad.',
+            'No te frustres si al inicio es difícil; el equilibrio mejora con práctica.'
+        ];
+    } else if (n.includes('yoga') || n.includes('meditaci')) {
+        pasos = [
+            'Prepara un espacio tranquilo y sin distracciones.',
+            'Sigue las posturas del video a tu propio ritmo, sin competir.',
+            'La respiración es clave: inhala al estirarte, exhala al relajarte.',
+            'Termina la sesión con unos minutos de quietud y gratitud.'
+        ];
+    } else if (n.includes('brazo') || n.includes('biceps') || n.includes('bíceps') || n.includes('pesas') || n.includes('curl') || n.includes('press') || n.includes('elevaci')) {
+        pasos = [
+            'Usa pesas ligeras (0.5 a 1 kg). Si no tienes, usa botellas de agua.',
+            'Mantén los codos pegados al cuerpo durante todo el movimiento.',
+            'Sube el peso en 2 segundos y bájalo en 4 segundos de forma controlada.',
+            'Descansa 30 segundos entre cada serie. La forma es más importante que el peso.'
+        ];
+    }
+    return pasos;
+}
 
 export default function DetalleEjercicioScreen() {
     const params = useLocalSearchParams();
@@ -33,6 +116,12 @@ export default function DetalleEjercicioScreen() {
     const [modalVisible, setModalVisible] = useState(false);
     const [cargando, setCargando] = useState(true);
     const [segundosVistos, setSegundosVistos] = useState(0);
+    // Seguridad: aviso previo obligatorio, botón de paro y esfuerzo percibido al terminar
+    // En una rutina el aviso y el calentamiento solo se muestran en el primer ejercicio
+    const [seguridadAceptada, setSeguridadAceptada] = useState(!!params.index && params.index !== '0');
+    const [detenido, setDetenido] = useState(false);
+    const [alarmaVisible, setAlarmaVisible] = useState(false);
+    const [esfuerzoVisible, setEsfuerzoVisible] = useState(false);
 
 
 
@@ -53,7 +142,78 @@ export default function DetalleEjercicioScreen() {
         descripcion: getParamString(params.descripcion),
         duracion: parseInt(getParamString(params.duracion)) || 60,
         dificultad: getParamString(params.dificultad) || 'Normal',
-        url: decodeURIComponent(getParamString(params.url))
+        url: decodeURIComponent(getParamString(params.url)),
+        idVideo: parseInt(getParamString(params.id_video)) || null,
+        contraindicaciones: getParamString(params.contraindicaciones),
+        fuente: getParamString(params.fuente)
+    };
+    const pasos = obtenerPasos(ejercicio.nombre);
+
+    // RF08 / RNF04: las instrucciones también se escuchan (voz del sistema, sin archivos de audio)
+    const [hablando, setHablando] = useState(false);
+    const escucharInstrucciones = () => {
+        if (hablando) {
+            Speech.stop();
+            setHablando(false);
+            return;
+        }
+        const texto = [`${ejercicio.nombre}.`, ...pasos.map((p, i) => `Paso ${i + 1}. ${p}`)].join(' ');
+        setHablando(true);
+        Speech.speak(texto, {
+            language: 'es-MX',
+            rate: 0.85,
+            onDone: () => setHablando(false),
+            onStopped: () => setHablando(false),
+            onError: () => setHablando(false),
+        });
+    };
+    useEffect(() => () => { Speech.stop(); }, []);
+
+    // Guarda la sesión en la BD (RF registro de sesión). Los ejercicios de rutinas
+    // predefinidas no tienen video en la BD y se guardan por nombre.
+    const registrarSesion = async (completada: boolean, esfuerzo: number | null, comentarios: string | null) => {
+        try {
+            await fetchSeguro(`${API_URL}/ejercicio-realizado`, {
+                method: 'POST',
+                body: JSON.stringify({
+                    id_video: ejercicio.idVideo,
+                    nombre_ejercicio: ejercicio.nombre,
+                    duracion_segundos: Math.round(segundosVistos),
+                    calorias_quemadas: completada ? Math.max(5, Math.floor(ejercicio.duracion / 60) * 4) : null,
+                    nivel_esfuerzo: esfuerzo,
+                    completado: completada ? 1 : 0,
+                    comentarios,
+                }),
+            });
+        } catch (error) {
+            console.log('No se pudo registrar la sesión en la BD:', error);
+        }
+    };
+
+    const detenerEjercicio = () => {
+        Speech.stop();
+        setDetenido(true);
+        setAlarmaVisible(true);
+    };
+
+    const terminarDetenido = async (conSintomas: boolean) => {
+        await registrarSesion(false, null, conSintomas ? 'Detenida por señal de alarma' : 'Detenida por el usuario');
+        setAlarmaVisible(false);
+        if (conSintomas) {
+            avisar(
+                'Descansa y busca ayuda',
+                'Siéntate en un lugar seguro y avisa a un familiar. Si tienes dolor en el pecho, falta de aire o te sientes a punto de desmayarte, llama al 911.',
+                () => router.back()
+            );
+        } else {
+            router.back();
+        }
+    };
+
+    const guardarEsfuerzo = async (valor: number) => {
+        setEsfuerzoVisible(false);
+        await registrarSesion(true, valor, null);
+        setCelebrationVisible(true);
     };
 
     // Anti-trampa: requiere ver al menos 1/3 de la duración real del video
@@ -77,9 +237,13 @@ export default function DetalleEjercicioScreen() {
                     id: (nextIndex + 1).toString(),
                     nombre: nextExercise.name,
                     descripcion: `Parte de la rutina: ${routineData.title}`,
-                    duracion: '300',
+                    // Los ejercicios de rutinas del admin traen su duración, video, fuente y contraindicaciones
+                    duracion: nextExercise.duracion || '300',
                     dificultad: 'Fácil',
                     url: encodeURIComponent(nextVideoId),
+                    id_video: nextExercise.id_video || '',
+                    fuente: nextExercise.fuente || '',
+                    contraindicaciones: nextExercise.contraindicaciones || '',
                     routine: JSON.stringify(routineData),
                     index: nextIndex.toString()
                 }
@@ -91,11 +255,9 @@ export default function DetalleEjercicioScreen() {
 
     const handleCompletar = async (forzar = false) => {
         if (!forzar && segundosVistos < TIEMPO_MINIMO) {
-            Alert.alert(
+            avisar(
                 'Tiempo insuficiente', 
-                `Para asegurar la efectividad del ejercicio, se requiere una duración mínima de ${TIEMPO_MINIMO} segundos.`,
-                [{ text: 'Entendido' }]
-            );
+                `Para asegurar la efectividad del ejercicio, se requiere una duración mínima de ${TIEMPO_MINIMO} segundos.`);
             return;
         }
 
@@ -150,8 +312,8 @@ export default function DetalleEjercicioScreen() {
             console.log('Error guardando progreso:', error);
         }
 
-        const isLast = routineData ? currentIndex === routineData.exercises.length - 1 : true;
-        setCelebrationVisible(true);
+        // Antes de celebrar se pide el esfuerzo percibido; al elegirlo se guarda la sesión
+        setEsfuerzoVisible(true);
         
         // El modal de celebración se encargará de avanzar o volver
     };
@@ -181,13 +343,13 @@ export default function DetalleEjercicioScreen() {
     // Soporte para seguimiento de tiempo en Web o sin video
     useEffect(() => {
         let interval: any;
-        if ((Platform.OS === 'web' || !videoId) && !cargando) {
+        if ((Platform.OS === 'web' || !videoId) && !cargando && seguridadAceptada && !detenido) {
             interval = setInterval(() => {
                 setSegundosVistos(prev => prev + 1);
             }, 1000);
         }
         return () => clearInterval(interval);
-    }, [cargando, videoId]);
+    }, [cargando, videoId, seguridadAceptada, detenido]);
 
     useEffect(() => {
         if (!videoId) setCargando(false);
@@ -214,14 +376,48 @@ export default function DetalleEjercicioScreen() {
 
             <ScrollView style={styles.container} showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
                 <View style={styles.webContainer}>
-                {/* Reproductor de Video Adaptable */}
-                {videoId ? (
+                {/* Aviso de seguridad previo: el video no aparece hasta aceptarlo */}
+                {!seguridadAceptada ? (
+                    <View style={[styles.contentSection, { backgroundColor: colors.card, borderColor: '#2563EB', borderWidth: 2, marginTop: 10 }]}>
+                        <View style={styles.sectionHeader}>
+                            <Ionicons name="shield-checkmark" size={30} color="#2563EB" />
+                            <Text style={[styles.sectionTitle, { color: colors.text }]}>Antes de empezar</Text>
+                        </View>
+                        <Text style={[styles.sectionText, { color: colors.text, fontWeight: '700' }]}>1. Calentamiento (3 a 5 minutos)</Text>
+                        <Text style={[styles.sectionText, { color: colors.textSecondary, marginBottom: 12 }]}>
+                            Marcha suave en tu lugar, gira los hombros y mueve los tobillos. Ten una silla firme cerca.
+                        </Text>
+                        {!!ejercicio.contraindicaciones && (
+                            <>
+                                <Text style={[styles.sectionText, { color: colors.text, fontWeight: '700' }]}>2. No hagas este ejercicio si…</Text>
+                                <Text style={[styles.sectionText, { color: colors.textSecondary, marginBottom: 12 }]}>{ejercicio.contraindicaciones}</Text>
+                            </>
+                        )}
+                        <Text style={[styles.sectionText, { color: '#B91C1C', fontWeight: '800' }]}>
+                            {ejercicio.contraindicaciones ? '3' : '2'}. Detente de inmediato si sientes:
+                        </Text>
+                        {SENALES_ALARMA.map(senal => (
+                            <Text key={senal} style={[styles.sectionText, { color: colors.text }]}>•  {senal}</Text>
+                        ))}
+                        <TouchableOpacity
+                            style={{ backgroundColor: '#1D4ED8', borderRadius: 16, minHeight: 64, justifyContent: 'center', alignItems: 'center', marginTop: 18 }}
+                            onPress={() => setSeguridadAceptada(true)}
+                        >
+                            <Text style={{ color: '#FFFFFF', fontSize: 21, fontWeight: '800' }}>Ya calenté, empezar</Text>
+                        </TouchableOpacity>
+                    </View>
+                ) : detenido ? (
+                    <View style={[styles.contentSection, { backgroundColor: colors.card, borderColor: colors.cardBorder, alignItems: 'center', marginTop: 10 }]}>
+                        <Ionicons name="hand-left" size={48} color="#DC2626" />
+                        <Text style={[styles.sectionTitle, { color: colors.text, textAlign: 'center' }]}>Ejercicio detenido</Text>
+                    </View>
+                ) : videoId ? (
                     <>
                         <View style={styles.videoCard}>
                             <View style={styles.videoContainer}>
                                 <VideoPlayer 
                                     videoId={videoId} 
-                                    onEnd={irAlSiguiente} 
+                                    onEnd={() => { if (!completado) handleCompletar(false); }} 
                                     onProgress={(segundos) => setSegundosVistos(segundos)}
                                     onReady={() => setCargando(false)}
                                 />
@@ -313,83 +509,39 @@ export default function DetalleEjercicioScreen() {
                     <Text style={[styles.sectionText, { color: colors.textSecondary }]}>
                         {ejercicio.descripcion || 'Este ejercicio está cuidadosamente diseñado para cuidar tus articulaciones y mejorar tu calidad de vida diaria.'}
                     </Text>
+                    {!!ejercicio.fuente && (
+                        <Text style={[styles.sectionText, { color: colors.textSecondary, fontStyle: 'italic', marginTop: 8 }]}>
+                            Fuente: {ejercicio.fuente}
+                        </Text>
+                    )}
                 </View>
 
                 {/* Paso a paso - Dinámico por tipo de ejercicio */}
                 <View style={[styles.contentSection, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}>
                     <View style={styles.sectionHeader}>
                         <Ionicons name="list" size={28} color="#2563EB" />
-                        <Text style={[styles.sectionTitle, { color: colors.text }]}>Instrucciones paso a paso</Text>
+                        <Text style={[styles.sectionTitle, { color: colors.text, flex: 1 }]}>Instrucciones paso a paso</Text>
                     </View>
+                    <TouchableOpacity
+                        style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, minHeight: 56, borderRadius: 14, borderWidth: 2, borderColor: '#2563EB', marginBottom: 14 }}
+                        onPress={escucharInstrucciones}
+                        accessibilityLabel={hablando ? 'Detener la lectura' : 'Escuchar las instrucciones'}
+                    >
+                        <Ionicons name={hablando ? 'volume-mute' : 'volume-high'} size={28} color="#2563EB" />
+                        <Text style={{ fontSize: 19, fontWeight: '800', color: '#2563EB' }}>
+                            {hablando ? 'Detener lectura' : 'Escuchar instrucciones'}
+                        </Text>
+                    </TouchableOpacity>
                     
                     <View style={styles.stepsContainer}>
-                        {(() => {
-                            const n = (ejercicio.nombre || '').toLowerCase();
-                            let pasos = [
-                                'Busca un espacio cómodo y seguro donde puedas moverte sin obstáculos.',
-                                'Sigue los movimientos del instructor en el video a tu propio ritmo.',
-                                'Respira profundamente y no contengas la respiración.',
-                                'Si sientes fatiga extrema, pausa el video y descansa.'
-                            ];
-                            if (n.includes('respiraci') || n.includes('diafragm') || n.includes('meditaci')) {
-                                pasos = [
-                                    'Siéntate cómodamente con la espalda recta y los pies apoyados en el suelo.',
-                                    'Inhala lentamente por la nariz durante 4 segundos, llenando el abdomen.',
-                                    'Mantén el aire 2 segundos y exhala suavemente por la boca durante 6 segundos.',
-                                    'Repite el ciclo sin forzar. La calma llega con la práctica constante.'
-                                ];
-                            } else if (n.includes('hombro') || n.includes('círculo') || n.includes('circulo') || n.includes('cuello')) {
-                                pasos = [
-                                    'Siéntate o párate con la espalda recta y los hombros relajados.',
-                                    'Realiza círculos lentos con los hombros hacia atrás, luego hacia adelante.',
-                                    'Mueve la cabeza suavemente de lado a lado sin forzar el cuello.',
-                                    'Si sientes tensión excesiva, reduce el rango de movimiento.'
-                                ];
-                            } else if (n.includes('estiramiento') || n.includes('lateral') || n.includes('espalda') || n.includes('relaj')) {
-                                pasos = [
-                                    'Colócate en una posición cómoda, de pie o sentado.',
-                                    'Realiza el estiramiento suavemente, sin rebotes ni movimientos bruscos.',
-                                    'Mantén cada posición entre 15 y 30 segundos respirando con calma.',
-                                    'Nunca estires hasta sentir dolor; la sensación debe ser de tensión leve.'
-                                ];
-                            } else if (n.includes('caminata') || n.includes('marcha') || n.includes('paso') || n.includes('tobillo')) {
-                                pasos = [
-                                    'Párate cerca de una silla o pared por si necesitas apoyo.',
-                                    'Levanta las rodillas de forma alternada a un ritmo cómodo para ti.',
-                                    'Mantén la espalda erguida y los brazos moviéndose con naturalidad.',
-                                    'Regula tu velocidad según tu nivel de energía del día.'
-                                ];
-                            } else if (n.includes('equilibrio') || n.includes('sentadilla')) {
-                                pasos = [
-                                    'Párate frente a una silla robusta que puedas sujetar si pierdes el equilibrio.',
-                                    'Levanta un pie lentamente y mantén la posición el mayor tiempo posible.',
-                                    'Cambia de pie y repite. Con el tiempo irás mejorando la estabilidad.',
-                                    'No te frustres si al inicio es difícil; el equilibrio mejora con práctica.'
-                                ];
-                            } else if (n.includes('yoga') || n.includes('meditaci')) {
-                                pasos = [
-                                    'Prepara un espacio tranquilo y sin distracciones.',
-                                    'Sigue las posturas del video a tu propio ritmo, sin competir.',
-                                    'La respiración es clave: inhala al estirarte, exhala al relajarte.',
-                                    'Termina la sesión con unos minutos de quietud y gratitud.'
-                                ];
-                            } else if (n.includes('brazo') || n.includes('biceps') || n.includes('bíceps') || n.includes('pesas') || n.includes('curl') || n.includes('press') || n.includes('elevaci')) {
-                                pasos = [
-                                    'Usa pesas ligeras (0.5 a 1 kg). Si no tienes, usa botellas de agua.',
-                                    'Mantén los codos pegados al cuerpo durante todo el movimiento.',
-                                    'Sube el peso en 2 segundos y bájalo en 4 segundos de forma controlada.',
-                                    'Descansa 30 segundos entre cada serie. La forma es más importante que el peso.'
-                                ];
-                            }
-                            return pasos.map((paso, index) => (
-                                <View key={index} style={styles.stepItem}>
-                                    <View style={[styles.stepNumberCircle, { backgroundColor: colors.settingIconBg }]}>
-                                        <Text style={[styles.stepNumberText, { color: colors.isDark ? '#60A5FA' : '#2563EB' }]}>{index + 1}</Text>
-                                    </View>
-                                    <Text style={[styles.stepText, { color: colors.textSecondary }]}>{paso}</Text>
+                        {pasos.map((paso, index) => (
+                            <View key={index} style={styles.stepItem}>
+                                <View style={[styles.stepNumberCircle, { backgroundColor: colors.settingIconBg }]}>
+                                    <Text style={[styles.stepNumberText, { color: colors.isDark ? '#60A5FA' : '#2563EB' }]}>{index + 1}</Text>
                                 </View>
-                            ));
-                        })()}
+                                <Text style={[styles.stepText, { color: colors.textSecondary }]}>{paso}</Text>
+                            </View>
+                        ))}
                     </View>
                 </View>
 
@@ -404,6 +556,8 @@ export default function DetalleEjercicioScreen() {
                     </Text>
                 </View>
 
+                {seguridadAceptada && !detenido && (
+                <>
                 <TouchableOpacity 
                     style={[
                         styles.mainButton, 
@@ -451,8 +605,77 @@ export default function DetalleEjercicioScreen() {
                         </Text>
                     </TouchableOpacity>
                 )}
+                </>
+                )}
                 </View>
             </ScrollView>
+
+            {/* Botón de paro: siempre visible mientras el ejercicio está en curso */}
+            {seguridadAceptada && !detenido && !completado && (
+                <View style={[styles.barraDetener, { backgroundColor: colors.bg, borderTopColor: colors.cardBorder }]}>
+                    <TouchableOpacity
+                        style={styles.botonDetener}
+                        onPress={detenerEjercicio}
+                        accessibilityLabel="Detener el ejercicio"
+                    >
+                        <Ionicons name="stop-circle" size={34} color="#FFFFFF" />
+                        <Text style={styles.botonDetenerTexto}>DETENER</Text>
+                    </TouchableOpacity>
+                </View>
+            )}
+
+            {/* Modal de señales de alarma al detener */}
+            <Modal visible={alarmaVisible} transparent animationType="fade">
+                <View style={styles.celebrationOverlay}>
+                    <View style={[styles.celebrationCard, { backgroundColor: colors.card, padding: 24 }]}>
+                        <Ionicons name="alert-circle" size={56} color="#DC2626" style={{ alignSelf: 'center' }} />
+                        <Text style={[styles.celebrationTitle, { color: colors.text }]}>¿Cómo te sientes?</Text>
+                        <Text style={[styles.sectionText, { color: colors.textSecondary, marginBottom: 8 }]}>¿Tienes alguno de estos síntomas?</Text>
+                        {SENALES_ALARMA.map(senal => (
+                            <Text key={senal} style={[styles.sectionText, { color: colors.text }]}>•  {senal}</Text>
+                        ))}
+                        <TouchableOpacity
+                            style={[styles.botonDetener, { marginTop: 18 }]}
+                            onPress={() => terminarDetenido(true)}
+                        >
+                            <Text style={styles.botonDetenerTexto}>Sí, me siento mal</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                            style={[styles.botonDetener, { backgroundColor: '#475569', marginTop: 12 }]}
+                            onPress={() => terminarDetenido(false)}
+                        >
+                            <Text style={styles.botonDetenerTexto}>No, solo quiero terminar</Text>
+                        </TouchableOpacity>
+                    </View>
+                </View>
+            </Modal>
+
+            {/* Modal de esfuerzo percibido + enfriamiento al completar */}
+            <Modal visible={esfuerzoVisible} transparent animationType="fade">
+                <View style={styles.celebrationOverlay}>
+                    <View style={[styles.celebrationCard, { backgroundColor: colors.card, padding: 24 }]}>
+                        <Text style={[styles.celebrationTitle, { color: colors.text }]}>¿Qué tan pesado fue?</Text>
+                        <Text style={[styles.sectionText, { color: colors.textSecondary, textAlign: 'center', marginBottom: 12 }]}>
+                            0 es nada de esfuerzo y 10 es el máximo que puedes dar.
+                        </Text>
+                        <View style={styles.gridEsfuerzo}>
+                            {ESCALA_ESFUERZO.map(e => (
+                                <TouchableOpacity
+                                    key={e.valor}
+                                    style={[styles.botonEsfuerzo, { borderColor: colors.cardBorder, backgroundColor: e.valor >= 7 ? '#FEE2E2' : e.valor >= 5 ? '#FEF3C7' : '#DCFCE7' }]}
+                                    onPress={() => guardarEsfuerzo(e.valor)}
+                                >
+                                    <Text style={styles.botonEsfuerzoNumero}>{e.valor}</Text>
+                                    <Text style={styles.botonEsfuerzoTexto}>{e.texto}</Text>
+                                </TouchableOpacity>
+                            ))}
+                        </View>
+                        <Text style={[styles.sectionText, { color: colors.text, marginTop: 14, fontWeight: '700' }]}>
+                            Enfriamiento: camina despacio 2 a 3 minutos y respira profundo antes de sentarte.
+                        </Text>
+                    </View>
+                </View>
+            </Modal>
 
             {/* Modal de Video Pantalla Completa */}
             <Modal
@@ -542,6 +765,54 @@ export default function DetalleEjercicioScreen() {
 }
 
 const styles = StyleSheet.create({
+    barraDetener: {
+        paddingHorizontal: 20,
+        paddingVertical: 12,
+        borderTopWidth: 1,
+    },
+    botonDetener: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 10,
+        backgroundColor: '#DC2626',
+        borderRadius: 16,
+        minHeight: 64,
+        width: '100%',
+        maxWidth: 600,
+        alignSelf: 'center',
+    },
+    botonDetenerTexto: {
+        color: '#FFFFFF',
+        fontSize: 22,
+        fontWeight: '800',
+    },
+    gridEsfuerzo: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        gap: 8,
+        justifyContent: 'center',
+    },
+    botonEsfuerzo: {
+        width: 84,
+        minHeight: 64,
+        borderRadius: 12,
+        borderWidth: 1,
+        justifyContent: 'center',
+        alignItems: 'center',
+        padding: 4,
+    },
+    botonEsfuerzoNumero: {
+        fontSize: 24,
+        fontWeight: '800',
+        color: '#1E293B',
+    },
+    botonEsfuerzoTexto: {
+        fontSize: 13,
+        fontWeight: '600',
+        color: '#334155',
+        textAlign: 'center',
+    },
     safeArea: {
         flex: 1,
         backgroundColor: '#F8FAFC',

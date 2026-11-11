@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import {
     View, Text, StyleSheet, ScrollView, TouchableOpacity,
     SafeAreaView, TextInput, Alert, ActivityIndicator,
-    Modal, StatusBar, RefreshControl, Platform
+    Modal, StatusBar, RefreshControl, Platform, Linking
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -10,9 +10,51 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { API_URL } from '../constants/config';
 import { fetchSeguro } from '../utils/api';
 
+import { avisar } from '../utils/dialogos';
 // ─── Tipos ────────────────────────────────────────────────────────────────────
 
-type Seccion = 'videos' | 'usuarios';
+type Seccion = 'videos' | 'rutinas' | 'usuarios';
+type FiltroVideos = 'todos' | 'revisar' | 'publicados';
+
+interface EjercicioRutina {
+    id_video: number;
+    nombre_video: string;
+    nivel_funcional: number;
+    activo: number;
+    tiene_fuente: number;
+}
+
+interface Rutina {
+    id_rutina: number;
+    titulo: string;
+    descripcion: string | null;
+    categoria: string;
+    nivel_funcional: number;
+    activo: number;
+    ejercicios: EjercicioRutina[];
+}
+
+interface FormRutina {
+    titulo: string;
+    descripcion: string;
+    categoria: string;
+    activo: number;
+    ejercicios: number[];   // id_video en orden
+}
+
+const RUTINA_VACIA: FormRutina = { titulo: '', descripcion: '', categoria: 'Movilidad', activo: 0, ejercicios: [] };
+
+const CATEGORIAS = ['Cardio', 'Zumba', 'Baile', 'Fuerza', 'Flexibilidad', 'Equilibrio', 'Movilidad', 'Silla', 'Relajación', 'Respiración', 'Pilates', 'Yoga'];
+
+// RN06: un ejercicio solo se muestra a los usuarios si está activo y tiene fuente documental
+const estaPublicado = (v: { activo: number; fuente_documental?: string; tiene_fuente?: number }) =>
+    !!v.activo && (v.tiene_fuente !== undefined ? !!v.tiene_fuente : !!(v.fuente_documental || '').trim());
+
+const abrirLink = (url: string) => {
+    if (!url) return;
+    if (Platform.OS === 'web') window.open(url, '_blank');
+    else Linking.openURL(url);
+};
 
 interface Video {
     id_video: number;
@@ -28,6 +70,9 @@ interface Video {
     edad_minima: number;
     edad_maxima: number;
     peso_maximo_recomendado: number;
+    nivel_funcional: number;
+    contraindicaciones: string;
+    fuente_documental: string;
     activo: number;
 }
 
@@ -55,7 +100,7 @@ const VIDEO_VACIO: Omit<Video, 'id_video'> = {
     nombre_video: '', descripcion: '', categoria: '', subcategoria: '',
     dificultad: 'baja', duracion_min: 0, link_video: '', url_miniatura: '',
     calorias_estimadas: 0, edad_minima: 60, edad_maxima: 100,
-    peso_maximo_recomendado: 0, activo: 1,
+    peso_maximo_recomendado: 0, nivel_funcional: 1, contraindicaciones: '', fuente_documental: '', activo: 1,
 };
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -204,6 +249,14 @@ export default function AdminScreen() {
     // Datos
     const [videos, setVideos] = useState<Video[]>([]);
     const [usuarios, setUsuarios] = useState<Usuario[]>([]);
+    const [rutinas, setRutinas] = useState<Rutina[]>([]);
+    const [filtroVideos, setFiltroVideos] = useState<FiltroVideos>('todos');
+
+    // Rutinas: modal, edición y buscador de ejercicios
+    const [modalRutina, setModalRutina] = useState(false);
+    const [rutinaEdit, setRutinaEdit] = useState<Rutina | null>(null);
+    const [fRutina, setFRutina] = useState<FormRutina>(RUTINA_VACIA);
+    const [buscarEjercicio, setBuscarEjercicio] = useState('');
 
     // Modales
     const [modalVideo, setModalVideo] = useState(false);
@@ -222,7 +275,7 @@ export default function AdminScreen() {
         (async () => {
             const rol = await AsyncStorage.getItem('userRol');
             if (rol !== 'admin') {
-                Alert.alert('Acceso denegado', 'Esta sección es solo para administradores.');
+                avisar('Acceso denegado', 'Esta sección es solo para administradores.');
                 router.replace('/home');
             }
         })();
@@ -235,12 +288,17 @@ export default function AdminScreen() {
             if (seccion === 'videos') {
                 const d = await api('/admin/videos');
                 if (d.success) setVideos(d.videos);
+            } else if (seccion === 'rutinas') {
+                // Las rutinas se arman con los ejercicios del catálogo
+                const [dr, dv] = await Promise.all([api('/admin/rutinas'), api('/admin/videos')]);
+                if (dr.success) setRutinas(dr.rutinas);
+                if (dv.success) setVideos(dv.videos);
             } else {
                 const d = await api('/admin/usuarios');
                 if (d.success) setUsuarios(d.usuarios);
             }
         } catch (e) {
-            Alert.alert('Error', 'No se pudo cargar la información.');
+            avisar('Error', 'No se pudo cargar la información.');
         } finally {
             setCargando(false);
             setRefreshing(false);
@@ -254,7 +312,7 @@ export default function AdminScreen() {
         if (Platform.OS === 'web') {
             window.alert(`${titulo}\n${mensaje}`);
         } else {
-            Alert.alert(titulo, mensaje);
+            avisar(titulo, mensaje);
         }
     };
 
@@ -308,13 +366,77 @@ export default function AdminScreen() {
             setCargando(true);
             try {
                 const d = await api(`/admin/videos/${v.id_video}`, 'DELETE');
-                if (d.success) { Alert.alert('', 'Video eliminado.'); cargar(); }
-                else Alert.alert('Error', d.message);
+                if (d.success) { avisar('', 'Video eliminado.'); cargar(); }
+                else avisar('Error', d.message);
             } catch (e: any) {
-                Alert.alert('Error', e.message);
+                avisar('Error', e.message);
             } finally { setCargando(false); }
         });
     };
+
+    // ── RUTINAS — acciones ─────────────────────────────────────────────────────
+    const abrirNuevaRutina = () => {
+        setRutinaEdit(null);
+        setFRutina(RUTINA_VACIA);
+        setBuscarEjercicio('');
+        setModalRutina(true);
+    };
+
+    const abrirEditarRutina = (r: Rutina) => {
+        setRutinaEdit(r);
+        setFRutina({
+            titulo: r.titulo, descripcion: r.descripcion || '', categoria: r.categoria,
+            activo: r.activo ? 1 : 0, ejercicios: r.ejercicios.map(e => e.id_video),
+        });
+        setBuscarEjercicio('');
+        setModalRutina(true);
+    };
+
+    const moverEjercicio = (indice: number, delta: number) => {
+        setFRutina(p => {
+            const lista = [...p.ejercicios];
+            const destino = indice + delta;
+            if (destino < 0 || destino >= lista.length) return p;
+            [lista[indice], lista[destino]] = [lista[destino], lista[indice]];
+            return { ...p, ejercicios: lista };
+        });
+    };
+
+    const guardarRutina = async () => {
+        if (!fRutina.titulo.trim()) { mostrarAlerta('Faltan datos', 'Escribe el título de la rutina.'); return; }
+        if (fRutina.ejercicios.length === 0) { mostrarAlerta('Faltan datos', 'Agrega al menos un ejercicio.'); return; }
+        setCargando(true);
+        try {
+            const d = rutinaEdit
+                ? await api(`/admin/rutinas/${rutinaEdit.id_rutina}`, 'PUT', fRutina)
+                : await api('/admin/rutinas', 'POST', fRutina);
+            if (d.success) { setModalRutina(false); cargar(); }
+            else mostrarAlerta('No se guardó', d.message);
+        } catch { mostrarAlerta('Error', 'No se pudo guardar.'); }
+        finally { setCargando(false); }
+    };
+
+    const eliminarRutina = (r: Rutina) => {
+        confirmarEliminacion('Eliminar rutina', `¿Eliminar la rutina "${r.titulo}"? Sus ejercicios no se borran.`, async () => {
+            setCargando(true);
+            try {
+                const d = await api(`/admin/rutinas/${r.id_rutina}`, 'DELETE');
+                if (d.success) cargar();
+                else avisar('Error', d.message);
+            } catch (e: any) {
+                avisar('Error', e.message);
+            } finally { setCargando(false); }
+        });
+    };
+
+    const videosPorId = new Map(videos.map(v => [v.id_video, v]));
+    const porRevisar = videos.filter(v => !estaPublicado(v)).length;
+    const videosFiltrados = videos.filter(v =>
+        filtroVideos === 'todos' ? true : filtroVideos === 'revisar' ? !estaPublicado(v) : estaPublicado(v));
+    const nivelRutinaForm = Math.max(1, ...fRutina.ejercicios.map(id => videosPorId.get(id)?.nivel_funcional || 1));
+    const candidatosRutina = videos.filter(v =>
+        !fRutina.ejercicios.includes(v.id_video) &&
+        (v.nombre_video + ' ' + v.categoria).toLowerCase().includes(buscarEjercicio.trim().toLowerCase()));
 
     // ── USUARIOS — acciones ────────────────────────────────────────────────────
     const abrirEditarUsuario = (u: Usuario) => {
@@ -342,10 +464,10 @@ export default function AdminScreen() {
             setCargando(true);
             try {
                 const d = await api(`/admin/usuarios/${u.id_usuario}`, 'DELETE');
-                if (d.success) { Alert.alert('', `Usuario "${u.nombre}" eliminado.`); cargar(); }
-                else Alert.alert('Error', d.message);
+                if (d.success) { avisar('', `Usuario "${u.nombre}" eliminado.`); cargar(); }
+                else avisar('Error', d.message);
             } catch (e: any) {
-                Alert.alert('Error', e.message);
+                avisar('Error', e.message);
             } finally { setCargando(false); }
         });
     };
@@ -393,6 +515,7 @@ export default function AdminScreen() {
             <View style={s.tabs}>
                 {([
                     { key: 'videos', label: 'Ejercicios', icon: 'play-circle-outline' },
+                    { key: 'rutinas', label: 'Rutinas', icon: 'list-outline' },
                     { key: 'usuarios', label: 'Usuarios', icon: 'people-outline' },
                 ] as { key: Seccion; label: string; icon: any }[]).map(t => (
                     <TouchableOpacity
@@ -416,13 +539,28 @@ export default function AdminScreen() {
             {seccion !== 'usuarios' && (
                 <TouchableOpacity
                     style={s.btnAgregar}
-                    onPress={abrirNuevoVideo}
+                    onPress={seccion === 'rutinas' ? abrirNuevaRutina : abrirNuevoVideo}
                 >
                     <Ionicons name="add-circle" size={20} color="#fff" />
                     <Text style={s.btnAgregarTxt}>
-                        Nuevo ejercicio
+                        {seccion === 'rutinas' ? 'Nueva rutina' : 'Nuevo ejercicio'}
                     </Text>
                 </TouchableOpacity>
+            )}
+
+            {/* ── Filtro de ejercicios: los borradores importados se revisan aquí ── */}
+            {seccion === 'videos' && (
+                <View style={s.filtros}>
+                    {([
+                        ['todos', `Todos (${videos.length})`],
+                        ['revisar', `Por revisar (${porRevisar})`],
+                        ['publicados', `Publicados (${videos.length - porRevisar})`],
+                    ] as [FiltroVideos, string][]).map(([clave, texto]) => (
+                        <TouchableOpacity key={clave} style={[s.chip, filtroVideos === clave && s.chipActivo]} onPress={() => setFiltroVideos(clave)}>
+                            <Text style={[s.chipTxt, filtroVideos === clave && s.chipTxtActivo]}>{texto}</Text>
+                        </TouchableOpacity>
+                    ))}
+                </View>
             )}
 
             {/* ── Lista principal ── */}
@@ -436,7 +574,7 @@ export default function AdminScreen() {
                         }
                     >
                         {/* ─── VIDEOS ─── */}
-                        {seccion === 'videos' && videos.map(v => (
+                        {seccion === 'videos' && videosFiltrados.map(v => (
                             <View key={v.id_video} style={s.tarjeta}>
                                 <View style={s.tarjetaTop}>
                                     <View style={{ flex: 1 }}>
@@ -462,18 +600,31 @@ export default function AdminScreen() {
                                         <Ionicons name="person-outline" size={13} color="#94A3B8" />
                                         <Text style={s.metaTxt}>{v.edad_minima}–{v.edad_maxima} años</Text>
                                     </View>
+                                    <View style={s.metaItem}>
+                                        <Ionicons name="stats-chart-outline" size={13} color="#94A3B8" />
+                                        <Text style={s.metaTxt}>Nivel {v.nivel_funcional ?? 1}</Text>
+                                    </View>
                                     <View style={[s.metaItem, { marginLeft: 'auto' }]}>
                                         <Ionicons
-                                            name={v.activo ? 'checkmark-circle' : 'close-circle'}
+                                            name={estaPublicado(v) ? 'checkmark-circle' : 'alert-circle'}
                                             size={14}
-                                            color={v.activo ? '#10B981' : '#EF4444'}
+                                            color={estaPublicado(v) ? '#10B981' : '#D97706'}
                                         />
-                                        <Text style={[s.metaTxt, { color: v.activo ? '#10B981' : '#EF4444' }]}>
-                                            {v.activo ? 'Activo' : 'Inactivo'}
+                                        <Text style={[s.metaTxt, { color: estaPublicado(v) ? '#10B981' : '#D97706' }]}>
+                                            {estaPublicado(v) ? 'Publicado' : !(v.fuente_documental || '').trim() ? 'Borrador · falta fuente' : 'Borrador'}
                                         </Text>
                                     </View>
                                 </View>
+                                {v.fuente_documental ? (
+                                    <Text style={s.fuenteTxt} numberOfLines={1}>Fuente: {v.fuente_documental}</Text>
+                                ) : null}
                                 <View style={s.tarjetaAcciones}>
+                                    {v.link_video ? (
+                                        <TouchableOpacity style={s.btnEditar} onPress={() => abrirLink(v.link_video)}>
+                                            <Ionicons name="logo-youtube" size={15} color="#DC2626" />
+                                            <Text style={[s.btnEditarTxt, { color: '#DC2626' }]}>Ver video</Text>
+                                        </TouchableOpacity>
+                                    ) : null}
                                     <TouchableOpacity style={s.btnEditar} onPress={() => abrirEditarVideo(v)}>
                                         <Ionicons name="pencil-outline" size={15} color="#2563EB" />
                                         <Text style={s.btnEditarTxt}>Editar</Text>
@@ -485,6 +636,63 @@ export default function AdminScreen() {
                                 </View>
                             </View>
                         ))}
+
+                        {/* ─── RUTINAS ─── */}
+                        {seccion === 'rutinas' && (
+                            <Text style={s.ayudaLista}>
+                                La rutina del día de cada usuario se elige entre las rutinas publicadas de su nivel.
+                                Una rutina solo se muestra si todos sus ejercicios están publicados.
+                            </Text>
+                        )}
+                        {seccion === 'rutinas' && rutinas.map(r => {
+                            const pendientes = r.ejercicios.filter(e => !estaPublicado(e)).length;
+                            return (
+                                <View key={r.id_rutina} style={s.tarjeta}>
+                                    <View style={s.tarjetaTop}>
+                                        <View style={{ flex: 1 }}>
+                                            <Text style={s.tarjetaTitulo} numberOfLines={1}>{r.titulo}</Text>
+                                            <Text style={s.tarjetaSub}>{r.categoria} · Nivel {r.nivel_funcional} · {r.ejercicios.length} ejercicios</Text>
+                                        </View>
+                                        <View style={[s.badge, { backgroundColor: r.activo ? '#10B98122' : '#D9770622' }]}>
+                                            <Text style={[s.badgeTxt, { color: r.activo ? '#10B981' : '#D97706' }]}>
+                                                {r.activo ? 'Publicada' : 'Borrador'}
+                                            </Text>
+                                        </View>
+                                    </View>
+                                    {r.ejercicios.map((e, i) => (
+                                        <View key={`${e.id_video}-${i}`} style={s.filaEjercicio}>
+                                            <Ionicons
+                                                name={estaPublicado(e) ? 'checkmark-circle' : 'alert-circle'}
+                                                size={16}
+                                                color={estaPublicado(e) ? '#10B981' : '#D97706'}
+                                            />
+                                            <Text style={s.filaEjercicioTxt} numberOfLines={1}>{i + 1}. {e.nombre_video}</Text>
+                                        </View>
+                                    ))}
+                                    {pendientes > 0 && (
+                                        <Text style={s.avisoPendientes}>
+                                            {pendientes} ejercicio(s) por revisar: publícalos en «Ejercicios» para poder activar esta rutina.
+                                        </Text>
+                                    )}
+                                    <View style={s.tarjetaAcciones}>
+                                        <TouchableOpacity style={s.btnEditar} onPress={() => abrirEditarRutina(r)}>
+                                            <Ionicons name="pencil-outline" size={15} color="#2563EB" />
+                                            <Text style={s.btnEditarTxt}>Editar</Text>
+                                        </TouchableOpacity>
+                                        <TouchableOpacity style={s.btnEliminar} onPress={() => eliminarRutina(r)}>
+                                            <Ionicons name="trash-outline" size={15} color="#EF4444" />
+                                            <Text style={s.btnEliminarTxt}>Eliminar</Text>
+                                        </TouchableOpacity>
+                                    </View>
+                                </View>
+                            );
+                        })}
+                        {seccion === 'rutinas' && rutinas.length === 0 && !cargando && (
+                            <View style={s.emptyState}>
+                                <Ionicons name="list-outline" size={48} color="#CBD5E1" />
+                                <Text style={s.emptyTxt}>No hay rutinas registradas</Text>
+                            </View>
+                        )}
 
                         {/* ─── USUARIOS ─── */}
                         {seccion === 'usuarios' && usuarios.map(u => (
@@ -548,10 +756,10 @@ export default function AdminScreen() {
                         ))}
 
                         {/* Empty state */}
-                        {seccion === 'videos' && videos.length === 0 && !cargando && (
+                        {seccion === 'videos' && videosFiltrados.length === 0 && !cargando && (
                             <View style={s.emptyState}>
                                 <Ionicons name="barbell-outline" size={48} color="#CBD5E1" />
-                                <Text style={s.emptyTxt}>No hay ejercicios registrados</Text>
+                                <Text style={s.emptyTxt}>{videos.length ? 'Nada en este filtro' : 'No hay ejercicios registrados'}</Text>
                             </View>
                         )}
                         {seccion === 'usuarios' && usuarios.length === 0 && !cargando && (
@@ -580,7 +788,7 @@ export default function AdminScreen() {
                     onChangeText={t => setFVideo(p => ({ ...p, descripcion: t }))} />
                 <Selector
                     label="Categoría *"
-                    opciones={['Cardio', 'Zumba', 'Fuerza', 'Flexibilidad', 'Equilibrio', 'Movilidad', 'Silla', 'Relajación', 'Respiración']}
+                    opciones={CATEGORIAS}
                     valor={fVideo.categoria}
                     onSelect={v => setFVideo(p => ({ ...p, categoria: v }))}
                 />
@@ -614,11 +822,121 @@ export default function AdminScreen() {
                     keyboardType="numeric"
                     onChangeText={t => setFVideo(p => ({ ...p, peso_maximo_recomendado: parseFloat(t) || 0 }))} />
                 <Selector
-                    label="Estado"
-                    opciones={['1', '0']}
-                    valor={fVideo.activo.toString()}
-                    onSelect={v => setFVideo(p => ({ ...p, activo: parseInt(v) }))}
+                    label="Nivel funcional mínimo (1 suave · 2 moderado · 3 activo)"
+                    opciones={['1', '2', '3']}
+                    valor={(fVideo.nivel_funcional ?? 1).toString()}
+                    onSelect={v => setFVideo(p => ({ ...p, nivel_funcional: parseInt(v) }))}
                 />
+                <Campo label="Contraindicaciones (cuándo NO hacerlo)" value={fVideo.contraindicaciones ?? ''} multiline
+                    placeholder="Ej. dolor agudo de rodilla, mareos al estar de pie"
+                    onChangeText={t => setFVideo(p => ({ ...p, contraindicaciones: t }))} />
+                <Campo label="Fuente documental * (obligatoria para publicar)" value={fVideo.fuente_documental ?? ''}
+                    placeholder="Ej. OMS 2020; Programa Vivifrail; Programa Otago"
+                    onChangeText={t => setFVideo(p => ({ ...p, fuente_documental: t }))} />
+                <Selector
+                    label="Estado"
+                    opciones={['Publicado', 'Borrador']}
+                    valor={fVideo.activo ? 'Publicado' : 'Borrador'}
+                    onSelect={v => setFVideo(p => ({ ...p, activo: v === 'Publicado' ? 1 : 0 }))}
+                />
+                <Text style={s.ayuda}>
+                    Publicado: lo ven los usuarios (requiere fuente documental). Borrador: queda guardado pero oculto.
+                </Text>
+                {fVideo.link_video ? (
+                    <TouchableOpacity style={s.btnVerVideo} onPress={() => abrirLink(fVideo.link_video)}>
+                        <Ionicons name="logo-youtube" size={18} color="#DC2626" />
+                        <Text style={s.btnVerVideoTxt}>Revisar el video en YouTube</Text>
+                    </TouchableOpacity>
+                ) : null}
+            </ModalForm>
+
+            {/* ══════════════════════════════════════════════════
+                MODAL — RUTINA
+            ══════════════════════════════════════════════════ */}
+            <ModalForm
+                visible={modalRutina}
+                titulo={rutinaEdit ? 'Editar rutina' : 'Nueva rutina'}
+                onClose={() => setModalRutina(false)}
+                onGuardar={guardarRutina}
+                cargando={cargando}
+            >
+                <Campo label="Título *" value={fRutina.titulo}
+                    placeholder="Ej. Movilidad y equilibrio"
+                    onChangeText={t => setFRutina(p => ({ ...p, titulo: t }))} />
+                <Campo label="Descripción" value={fRutina.descripcion} multiline
+                    onChangeText={t => setFRutina(p => ({ ...p, descripcion: t }))} />
+                <Selector
+                    label="Categoría principal (se usa para no recomendarla ante ciertas enfermedades)"
+                    opciones={CATEGORIAS}
+                    valor={fRutina.categoria}
+                    onSelect={v => setFRutina(p => ({ ...p, categoria: v }))}
+                />
+                <Selector
+                    label="Estado"
+                    opciones={['Publicada', 'Borrador']}
+                    valor={fRutina.activo ? 'Publicada' : 'Borrador'}
+                    onSelect={v => setFRutina(p => ({ ...p, activo: v === 'Publicada' ? 1 : 0 }))}
+                />
+
+                <Text style={s.campoLabel}>Ejercicios en orden ({fRutina.ejercicios.length}) · Nivel de la rutina: {nivelRutinaForm}</Text>
+                <Text style={s.ayuda}>El nivel se calcula solo: es el del ejercicio más exigente.</Text>
+                {fRutina.ejercicios.length === 0 && (
+                    <Text style={s.ayuda}>Aún no hay ejercicios. Agrégalos desde la lista de abajo.</Text>
+                )}
+                {fRutina.ejercicios.map((id, i) => {
+                    const v = videosPorId.get(id);
+                    return (
+                        <View key={`${id}-${i}`} style={s.filaEditable}>
+                            <Ionicons
+                                name={v && estaPublicado(v) ? 'checkmark-circle' : 'alert-circle'}
+                                size={18}
+                                color={v && estaPublicado(v) ? '#10B981' : '#D97706'}
+                            />
+                            <Text style={s.filaEditableTxt} numberOfLines={2}>
+                                {i + 1}. {v?.nombre_video ?? `Ejercicio ${id}`}{v ? ` · N${v.nivel_funcional}` : ''}
+                            </Text>
+                            <TouchableOpacity onPress={() => moverEjercicio(i, -1)} style={s.btnIcono} accessibilityLabel="Subir">
+                                <Ionicons name="arrow-up" size={18} color="#2563EB" />
+                            </TouchableOpacity>
+                            <TouchableOpacity onPress={() => moverEjercicio(i, 1)} style={s.btnIcono} accessibilityLabel="Bajar">
+                                <Ionicons name="arrow-down" size={18} color="#2563EB" />
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                                onPress={() => setFRutina(p => ({ ...p, ejercicios: p.ejercicios.filter((_, j) => j !== i) }))}
+                                style={s.btnIcono} accessibilityLabel="Quitar"
+                            >
+                                <Ionicons name="close" size={18} color="#EF4444" />
+                            </TouchableOpacity>
+                        </View>
+                    );
+                })}
+
+                <Text style={[s.campoLabel, { marginTop: 16 }]}>Agregar ejercicios del catálogo</Text>
+                <TextInput
+                    style={s.campoInput}
+                    value={buscarEjercicio}
+                    onChangeText={setBuscarEjercicio}
+                    placeholder="Buscar por nombre o categoría..."
+                    placeholderTextColor="#94A3B8"
+                />
+                <View style={{ marginTop: 8, marginBottom: 12 }}>
+                    {candidatosRutina.slice(0, 30).map(v => (
+                        <TouchableOpacity
+                            key={v.id_video}
+                            style={s.filaCandidato}
+                            onPress={() => setFRutina(p => ({ ...p, ejercicios: [...p.ejercicios, v.id_video] }))}
+                        >
+                            <Ionicons name="add-circle-outline" size={18} color="#2563EB" />
+                            <Text style={s.filaEditableTxt} numberOfLines={1}>
+                                {v.nombre_video} · {v.categoria} · N{v.nivel_funcional}
+                            </Text>
+                            {!estaPublicado(v) && <Text style={s.etiquetaBorrador}>borrador</Text>}
+                        </TouchableOpacity>
+                    ))}
+                    {candidatosRutina.length > 30 && (
+                        <Text style={s.ayuda}>Hay {candidatosRutina.length - 30} más: escribe en el buscador para encontrarlos.</Text>
+                    )}
+                </View>
             </ModalForm>
 
             {/* ══════════════════════════════════════════════════
@@ -683,6 +1001,20 @@ export default function AdminScreen() {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 const s = StyleSheet.create({
+    filtros: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, paddingHorizontal: 16, marginBottom: 8 },
+    fuenteTxt: { fontSize: 12, color: '#64748B', marginTop: 6 },
+    ayuda: { fontSize: 12, color: '#64748B', marginBottom: 10, lineHeight: 17 },
+    ayudaLista: { fontSize: 13, color: '#64748B', marginBottom: 12, lineHeight: 18 },
+    btnVerVideo: { flexDirection: 'row', alignItems: 'center', gap: 8, padding: 12, borderRadius: 12, backgroundColor: '#FEF2F2', marginBottom: 12, alignSelf: 'flex-start' },
+    btnVerVideoTxt: { color: '#DC2626', fontWeight: '700', fontSize: 14 },
+    filaEjercicio: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 6 },
+    filaEjercicioTxt: { fontSize: 13, color: '#334155', flexShrink: 1 },
+    avisoPendientes: { fontSize: 12, color: '#B45309', marginTop: 8, fontWeight: '600' },
+    filaEditable: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: '#F1F5F9' },
+    filaEditableTxt: { flex: 1, fontSize: 14, color: '#1E293B' },
+    btnIcono: { padding: 6, borderRadius: 8, backgroundColor: '#F1F5F9' },
+    filaCandidato: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 10, paddingHorizontal: 8, borderRadius: 10, backgroundColor: '#F8FAFC', marginBottom: 6 },
+    etiquetaBorrador: { fontSize: 11, color: '#B45309', fontWeight: '700', backgroundColor: '#FEF3C7', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 },
     safe: { flex: 1, backgroundColor: '#F1F5F9' },
 
     // Header
