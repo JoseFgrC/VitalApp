@@ -28,7 +28,11 @@ function cliente() {
         }
         const inicio = performance.now();
         const r = await fetch(BASE + path, { method, headers, body: payload });
-        return { status: r.status, data: await r.json(), ms: performance.now() - inicio };
+        // Las rutas inexistentes responden con HTML (404 de Express), no con JSON
+        const texto = await r.text();
+        let data = {};
+        try { data = JSON.parse(texto); } catch { /* respuesta no JSON */ }
+        return { status: r.status, data, ms: performance.now() - inicio };
     };
     return c;
 }
@@ -136,6 +140,17 @@ try {
     ok(r.data.estado === 'revocado', 'el adulto revoca el acceso');
     r = await cuidador.call('GET', `/cuidador/adultos/${ua.id_usuario}/progreso`);
     ok(r.status === 403, 'RN05: después de revocar el cuidador ya no ve nada');
+
+    // ── RN05 / RD07: rutas antiguas con datos de salud eliminadas (IDOR) ──────
+    // Antes cualquier sesión podía leer o escribir la evolución y los reportes de otro usuario.
+    r = await intruso.call('GET', `/evolucion/${ua.id_usuario}`);
+    ok(r.status === 404, `GET /api/evolucion/:id_usuario ya no existe (status ${r.status})`);
+    r = await intruso.call('POST', '/evolucion', { id_usuario: ua.id_usuario, fecha_registro: '2026-01-01', peso: 99 });
+    ok(r.status === 404, `POST /api/evolucion ya no existe (status ${r.status})`);
+    r = await intruso.call('GET', `/reporte/${ua.id_usuario}`);
+    ok(r.status === 404, `GET /api/reporte/:id_usuario ya no existe (status ${r.status})`);
+    r = await intruso.call('GET', `/cuidador/adultos/${ua.id_usuario}/progreso`);
+    ok(r.status === 403 && r.data.success === false, `RN05: un cuidador no autorizado recibe 403 al pedir el progreso de otro adulto (status ${r.status})`);
 
     // ── I3: derechos sobre los datos (RF15) ───────────────────────────────────
     r = await adulto.call('GET', '/mis-datos');

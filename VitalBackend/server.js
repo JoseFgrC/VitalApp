@@ -1457,77 +1457,6 @@ app.delete('/api/mis-datos', async (req, res) => {
 });
 
 // ============================================
-// EVOLUCIÓN DEL USUARIO
-// ============================================
-app.get('/api/evolucion/:id_usuario', async (req, res) => {
-    const { id_usuario } = req.params;
-    try {
-        const [rows] = await pool.query(
-            `SELECT id_evolucion, fecha_registro, peso, presion_arterial_sistolica,
-                    presion_arterial_diastolica, frecuencia_cardiaca_reposo,
-                    flexibilidad_cm, fuerza_prensalon_kg, equilibrio_segundos, notas
-             FROM evolucion_usuario
-             WHERE id_usuario = ?
-             ORDER BY fecha_registro DESC`,
-            [id_usuario]
-        );
-        res.json({ success: true, evolucion: rows });
-    } catch (error) {
-        console.error(' Error al obtener evolución:', error);
-        res.status(500).json({ success: false, message: 'Error del servidor' });
-    }
-});
-
-app.post('/api/evolucion', async (req, res) => {
-    const { id_usuario, fecha_registro, peso, presion_arterial_sistolica,
-        presion_arterial_diastolica, frecuencia_cardiaca_reposo,
-        flexibilidad_cm, fuerza_prensalon_kg, equilibrio_segundos, notas } = req.body;
-
-    if (!id_usuario || !fecha_registro) {
-        return res.status(400).json({ success: false, message: 'id_usuario y fecha_registro son obligatorios' });
-    }
-
-    try {
-        const [result] = await pool.query(
-            `INSERT INTO evolucion_usuario
-                (id_usuario, fecha_registro, peso, presion_arterial_sistolica,
-                 presion_arterial_diastolica, frecuencia_cardiaca_reposo,
-                 flexibilidad_cm, fuerza_prensalon_kg, equilibrio_segundos, notas)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-            [id_usuario, fecha_registro, peso ?? null, presion_arterial_sistolica ?? null,
-                presion_arterial_diastolica ?? null, frecuencia_cardiaca_reposo ?? null,
-                flexibilidad_cm ?? null, fuerza_prensalon_kg ?? null, equilibrio_segundos ?? null, notas ?? null]
-        );
-        res.json({ success: true, id: result.insertId, message: 'Evolución registrada correctamente' });
-    } catch (error) {
-        console.error(' Error al registrar evolución:', error);
-        res.status(500).json({ success: false, message: error.message });
-    }
-});
-
-// ============================================
-// REPORTE SEMANAL
-// ============================================
-app.get('/api/reporte/:id_usuario', async (req, res) => {
-    const { id_usuario } = req.params;
-    try {
-        const [rows] = await pool.query(
-            `SELECT id_reporte, fecha_inicio_semana, fecha_fin_semana, total_ejercicios,
-                    total_minutos, total_calorias, dias_activos, promedio_esfuerzo,
-                    progreso_fisico, observaciones, fecha_generacion
-             FROM reporte_semanal
-             WHERE id_usuario = ?
-             ORDER BY fecha_generacion DESC`,
-            [id_usuario]
-        );
-        res.json({ success: true, reportes: rows });
-    } catch (error) {
-        console.error(' Error al obtener reportes:', error);
-        res.status(500).json({ success: false, message: 'Error del servidor' });
-    }
-});
-
-// ============================================
 // ADMIN — VIDEOS
 // ============================================
 
@@ -1853,6 +1782,4 @@ app.listen(PORT, '0.0.0.0', () => {
     console.log(` Ejercicios:      GET /api/exercises`);
     console.log(` Ejerc. usuario:  GET /api/exercises/user/:id`);
     console.log(`  Registrar ej.:  POST /api/ejercicio-realizado`);
-    console.log(` Evolución:       GET /api/evolucion/:id_usuario`);
-    console.log(` Reporte:         GET /api/reporte/:id_usuario`);
 });
