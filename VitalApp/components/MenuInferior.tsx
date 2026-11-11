@@ -1,8 +1,9 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Platform, useWindowDimensions } from 'react-native';
 import { useRouter, usePathname } from 'expo-router';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useTheme } from '../hooks/useTheme';
+import { factorTamanoLetra } from '../utils/tamanoLetra';
 
 // Barra inferior accesible (WCAG 2.2): etiquetas de 16 px, contraste ≥ 4.5:1,
 // pestaña activa marcada con fondo y negritas (no solo con color) y áreas táctiles ≥ 48×48.
@@ -20,10 +21,22 @@ export default function MenuInferior() {
   const pathname = usePathname();
   const { width } = useWindowDimensions();
   const { colors } = useTheme();
+  // Ampliación de «Tamaño de letra» (web). width es el ancho real de la pantalla, sin ampliar.
+  const [factor, setFactor] = useState(factorTamanoLetra());
+  useEffect(() => {
+    if (Platform.OS !== 'web' || typeof window === 'undefined') return;
+    const alCambiar = () => setFactor(factorTamanoLetra());
+    window.addEventListener('tamanoLetra', alCambiar);
+    return () => window.removeEventListener('tamanoLetra', alCambiar);
+  }, []);
   const isDesktop = width >= 768;
-  // En teléfonos angostos (< 380 px) se elimina el espacio entre botones para que
-  // «Ejercicios» quepa completo a 16 px sin partirse
-  const angosto = width < 380;
+  // Ancho real de cada botón; la etiqueta más larga de una palabra («Ejercicios») mide ~4.4 veces
+  // el tamaño de letra. La letra crece con la ampliación, pero nunca baja de 16 px reales ni
+  // excede lo que cabe sin partir la palabra.
+  const anchoBoton = (isDesktop ? 560 : width) / ITEMS.length;
+  const letraReal = Math.max(16, Math.min(16 * factor, (anchoBoton - 6) / 4.4));
+  const letraCss = letraReal / factor;
+  const angosto = letraReal * 4.6 > anchoBoton - 6;
 
   // Colores con contraste ≥ 4.5:1 sobre su fondo (claro: #FFFFFF / #DBEAFE; oscuro: #1E293B / #1E3A8A)
   const colorInactivo = colors.isDark ? '#CBD5E1' : '#475569';
@@ -49,7 +62,7 @@ export default function MenuInferior() {
             onPress={() => router.replace(item.ruta as any)}
           >
             {item.icono(color, activo)}
-            <Text style={[styles.menuText, angosto && styles.menuTextAngosto, { color }, activo && styles.menuTextActivo]} numberOfLines={2}>
+            <Text style={[styles.menuText, angosto && styles.menuTextAngosto, { color, fontSize: letraCss, lineHeight: letraCss * 1.2 }, activo && styles.menuTextActivo]} numberOfLines={2}>
               {item.nombre}
             </Text>
           </TouchableOpacity>

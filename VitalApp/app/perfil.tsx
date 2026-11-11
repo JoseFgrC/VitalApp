@@ -25,7 +25,8 @@ import { fetchSeguro } from '../utils/api';
 import { useTheme } from '../hooks/useTheme';
 
 
-import { avisar } from '../utils/dialogos';
+import { avisar, confirmar } from '../utils/dialogos';
+import { OPCIONES_TAMANO, TamanoLetra, leerTamanoLetra, guardarTamanoLetra } from '../utils/tamanoLetra';
 export default function PerfilScreen() {
     const router = useRouter();
     const [editando, setEditando] = useState(false);
@@ -50,6 +51,14 @@ export default function PerfilScreen() {
     const [mfaSecret, setMfaSecret] = useState('');
     const [mfaTokenInput, setMfaTokenInput] = useState('');
     const [mfaLoading, setMfaLoading] = useState(false);
+    // Accesibilidad: tamaño de letra y sección de opciones avanzadas (plegada)
+    const [tamanoLetra, setTamanoLetra] = useState<TamanoLetra>('normal');
+    const [verAvanzadas, setVerAvanzadas] = useState(false);
+    useEffect(() => { leerTamanoLetra().then(setTamanoLetra); }, []);
+    const elegirTamano = async (clave: TamanoLetra) => {
+        setTamanoLetra(clave);
+        await guardarTamanoLetra(clave);
+    };
 
     // Cargar datos cada vez que la pantalla tiene foco
     useFocusEffect(
@@ -179,46 +188,18 @@ export default function PerfilScreen() {
         await AsyncStorage.setItem('notifications', valor.toString());
     };
 
-    const handleLogout = async () => {
-        if (Platform.OS === 'web') {
-            const confirmed = window.confirm('¿Desea finalizar la sesión actual?');
-            if (confirmed) {
-                await AsyncStorage.removeItem('userId');
-                await AsyncStorage.removeItem('userSession');
-                await AsyncStorage.removeItem('jwtToken');
-                await AsyncStorage.removeItem('csrfToken');
-                await AsyncStorage.removeItem('userName');
-                await AsyncStorage.removeItem('userEmail');
-                await AsyncStorage.removeItem('userAge');
-                await AsyncStorage.removeItem('userRol');
-                await AsyncStorage.removeItem('userConditions');
+    const handleLogout = () => {
+        // Confirmación clara antes de salir (evita cerrar sesión por un toque accidental)
+        confirmar(
+            '¿Cerrar sesión?',
+            'Para volver a entrar necesitarás tu correo y tu contraseña.',
+            'Sí, cerrar sesión',
+            async () => {
+                await Promise.all(['userId', 'userSession', 'jwtToken', 'csrfToken', 'userName', 'userEmail', 'userAge', 'userRol', 'userConditions']
+                    .map(k => AsyncStorage.removeItem(k)));
                 router.replace('/login');
             }
-        } else {
-            Alert.alert(
-                'Cerrar sesión',
-                '¿Desea finalizar la sesión actual?',
-                [
-                    { text: 'Cancelar', style: 'cancel' },
-                    {
-                        text: 'Confirmar',
-                        style: 'destructive',
-                        onPress: async () => {
-                            await AsyncStorage.removeItem('userId');
-                            await AsyncStorage.removeItem('userSession');
-                            await AsyncStorage.removeItem('jwtToken');
-                            await AsyncStorage.removeItem('csrfToken');
-                            await AsyncStorage.removeItem('userName');
-                            await AsyncStorage.removeItem('userEmail');
-                            await AsyncStorage.removeItem('userAge');
-                            await AsyncStorage.removeItem('userRol');
-                await AsyncStorage.removeItem('userConditions');
-                            router.replace('/login');
-                        }
-                    }
-                ]
-            );
-        }
+        );
     };
 
     const handleSetupMfa = async () => {
@@ -442,6 +423,23 @@ export default function PerfilScreen() {
                     </View>
                 </View>
 
+                {/* Privacidad y cuidadores: visible arriba, con un botón grande */}
+                <TouchableOpacity
+                    style={[styles.botonDestacado, { backgroundColor: colors.card, borderColor: colors.isDark ? '#3B82F6' : '#1D4ED8' }]}
+                    onPress={() => router.push('/mis-datos')}
+                    accessibilityRole="button"
+                    activeOpacity={0.8}
+                >
+                    <View style={[styles.botonDestacadoIcono, { backgroundColor: colors.isDark ? '#1E3A8A' : '#DBEAFE' }]}>
+                        <Ionicons name="people" size={32} color={colors.isDark ? '#FFFFFF' : '#1D4ED8'} />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                        <Text style={[styles.botonDestacadoTitulo, { color: colors.text }]}>Privacidad y cuidadores</Text>
+                        <Text style={[styles.botonDestacadoTexto, { color: colors.textSecondary }]}>Quién puede ver tu avance, tus datos y tu nivel</Text>
+                    </View>
+                    <Ionicons name="chevron-forward" size={28} color={colors.text} />
+                </TouchableOpacity>
+
                 {/* Insignias Recientes - NUEVO */}
                 <View style={[styles.sectionCard, { backgroundColor: colors.card, borderColor: colors.cardBorder, paddingVertical: 20 }]}>
                     <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
@@ -576,46 +574,79 @@ export default function PerfilScreen() {
                         />
                     </View>
 
-                    <TouchableOpacity
-                        style={[styles.settingItem, { borderBottomWidth: 1 }]}
-                        onPress={() => mfaEnabled ? handleDisableMfa() : handleSetupMfa()}
-                        activeOpacity={0.7}
-                    >
-                        <View style={[styles.settingIcon, { backgroundColor: temaOscuro ? '#064E3B' : '#D1FAE5' }]}>
-                            <Ionicons name={mfaEnabled ? "shield-checkmark" : "shield-outline"} size={24} color="#10B981" />
+                    {/* Tamaño de letra: se aplica en toda la app */}
+                    <View style={styles.bloqueTamano}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 12 }}>
+                            <View style={[styles.settingIcon, { backgroundColor: temaOscuro ? '#1E3A8A' : '#DBEAFE' }]}>
+                                <Ionicons name="text" size={24} color={temaOscuro ? '#FFFFFF' : '#1D4ED8'} />
+                            </View>
+                            <Text style={[styles.settingText, { color: colors.text }]}>Tamaño de letra</Text>
                         </View>
-                        <View style={{ flex: 1 }}>
-                            <Text style={[styles.settingText, { color: colors.text }]}>Seguridad 2 Pasos (MFA)</Text>
-                            <Text style={{ color: mfaEnabled ? '#10B981' : '#EF4444', fontSize: 12, fontWeight: 'bold', marginTop: 2 }}>
-                                {mfaEnabled ? 'ACTIVADO' : 'DESACTIVADO'}
-                            </Text>
+                        <View style={styles.filaTamano} accessibilityRole="radiogroup" accessibilityLabel="Tamaño de letra">
+                            {OPCIONES_TAMANO.map((o) => {
+                                const elegido = tamanoLetra === o.clave;
+                                return (
+                                    <TouchableOpacity
+                                        key={o.clave}
+                                        style={[styles.opcionTamano, { borderColor: elegido ? '#1D4ED8' : colors.cardBorder, backgroundColor: elegido ? '#1D4ED8' : colors.card }]}
+                                        onPress={() => elegirTamano(o.clave)}
+                                        accessibilityRole="radio"
+                                        accessibilityState={{ checked: elegido }}
+                                        aria-checked={elegido}
+                                        accessibilityLabel={`Letra ${o.nombre.toLowerCase()}`}
+                                    >
+                                        <Text style={{ fontSize: Math.round(18 * o.factor), fontWeight: '900', color: elegido ? '#FFFFFF' : colors.text }}>Aa</Text>
+                                        <Text style={[styles.opcionTamanoTexto, { color: elegido ? '#FFFFFF' : colors.text }]}>{o.nombre}</Text>
+                                    </TouchableOpacity>
+                                );
+                            })}
                         </View>
-                        {mfaLoading ? <ActivityIndicator color="#2563EB" /> : <Ionicons name="chevron-forward" size={24} color={colors.textSecondary} />}
-                    </TouchableOpacity>
+                    </View>
 
                     <TouchableOpacity
-                        style={styles.settingItem}
+                        style={[styles.settingItem, { borderBottomWidth: 0 }]}
                         onPress={() => router.push('/recordatorios')}
                         activeOpacity={0.7}
                     >
                         <View style={[styles.settingIcon, { backgroundColor: temaOscuro ? '#78350F' : '#FEF3C7' }]}>
-                            <Ionicons name="alarm" size={24} color="#D97706" />
+                            <Ionicons name="alarm" size={24} color="#B45309" />
                         </View>
-                        <Text style={[styles.settingText, { color: colors.text }]}>Recordatorios de Ejercicio</Text>
+                        <Text style={[styles.settingText, { color: colors.text }]}>Recordatorios de ejercicio</Text>
                         <Ionicons name="chevron-forward" size={24} color={colors.textSecondary} />
                     </TouchableOpacity>
+                </View>
 
+                {/* Opciones avanzadas (plegadas): verificación en dos pasos */}
+                <View style={[styles.sectionCard, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}>
                     <TouchableOpacity
-                        style={[styles.settingItem, { borderBottomWidth: 0 }]}
-                        onPress={() => router.push('/mis-datos')}
-                        activeOpacity={0.7}
+                        style={styles.encabezadoAvanzadas}
+                        onPress={() => setVerAvanzadas(v => !v)}
+                        accessibilityRole="button"
+                        accessibilityState={{ expanded: verAvanzadas }}
+                        aria-expanded={verAvanzadas}
                     >
-                        <View style={[styles.settingIcon, { backgroundColor: temaOscuro ? '#064E3B' : '#DCFCE7' }]}>
-                            <Ionicons name="people" size={24} color="#059669" />
-                        </View>
-                        <Text style={[styles.settingText, { color: colors.text }]}>Privacidad y cuidadores</Text>
-                        <Ionicons name="chevron-forward" size={24} color={colors.textSecondary} />
+                        <Ionicons name="settings-outline" size={26} color={colors.text} />
+                        <Text style={[styles.settingText, { color: colors.text }]}>Opciones avanzadas</Text>
+                        <Ionicons name={verAvanzadas ? 'chevron-up' : 'chevron-down'} size={26} color={colors.text} />
                     </TouchableOpacity>
+                    {verAvanzadas && (
+                        <TouchableOpacity
+                            style={[styles.settingItem, { borderBottomWidth: 0, marginTop: 8 }]}
+                            onPress={() => mfaEnabled ? handleDisableMfa() : handleSetupMfa()}
+                            activeOpacity={0.7}
+                        >
+                            <View style={[styles.settingIcon, { backgroundColor: temaOscuro ? '#064E3B' : '#D1FAE5' }]}>
+                                <Ionicons name={mfaEnabled ? "shield-checkmark" : "shield-outline"} size={24} color={temaOscuro ? '#6EE7B7' : '#047857'} />
+                            </View>
+                            <View style={{ flex: 1 }}>
+                                <Text style={[styles.settingText, { color: colors.text }]}>Verificación en dos pasos</Text>
+                                <Text style={{ color: colors.textSecondary, fontSize: 18, marginTop: 2 }}>
+                                    {mfaEnabled ? 'Activada: al entrar te pedirá un código de tu celular' : 'Desactivada'}
+                                </Text>
+                            </View>
+                            {mfaLoading ? <ActivityIndicator color="#2563EB" /> : <Ionicons name="chevron-forward" size={24} color={colors.textSecondary} />}
+                        </TouchableOpacity>
+                    )}
                 </View>
 
                 {/* Cerrar Sesión */}
@@ -625,7 +656,7 @@ export default function PerfilScreen() {
                     activeOpacity={0.8}
                 >
                     <Ionicons name="log-out" size={24} color="#DC2626" />
-                    <Text style={styles.logoutButtonText}>Cerrar Sesión Segura</Text>
+                    <Text style={styles.logoutButtonText}>Cerrar sesión</Text>
                 </TouchableOpacity>
 
             </ScrollView>
@@ -695,6 +726,18 @@ export default function PerfilScreen() {
 }
 
 const styles = StyleSheet.create({
+    botonDestacado: {
+        flexDirection: 'row', alignItems: 'center', gap: 14, marginHorizontal: 20, marginBottom: 20,
+        padding: 18, borderRadius: 22, borderWidth: 2, minHeight: 88,
+    },
+    botonDestacadoIcono: { width: 56, height: 56, borderRadius: 28, alignItems: 'center', justifyContent: 'center' },
+    botonDestacadoTitulo: { fontSize: 21, fontWeight: '800' },
+    botonDestacadoTexto: { fontSize: 18, lineHeight: 24, marginTop: 2 },
+    bloqueTamano: { paddingVertical: 16, borderBottomWidth: 1, borderBottomColor: '#E2E8F0' },
+    filaTamano: { flexDirection: 'row', gap: 10 },
+    opcionTamano: { flex: 1, minHeight: 80, borderRadius: 16, borderWidth: 2, alignItems: 'center', justifyContent: 'center', paddingVertical: 8 },
+    opcionTamanoTexto: { fontSize: 18, fontWeight: '700', textAlign: 'center' },
+    encabezadoAvanzadas: { flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: 56 },
     safeArea: {
         flex: 1,
         backgroundColor: '#F8FAFC'

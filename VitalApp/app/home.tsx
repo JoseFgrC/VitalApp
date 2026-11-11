@@ -14,7 +14,7 @@ import { API_URL } from '../constants/config';
 import { fetchSeguro } from '../utils/api';
 
 
-import { avisar } from '../utils/dialogos';
+import { avisar, confirmar } from '../utils/dialogos';
 import { textoIntensidad, colorIntensidad } from '../utils/textos';
 import { evaluarEjercicio, cargarCondiciones } from '../utils/condiciones';
 
@@ -593,24 +593,13 @@ export default function HomeScreen() {
       router.replace('/login');
     };
 
-    if (Platform.OS === 'web') {
-      if (window.confirm('¿Deseas salir de la aplicación?')) {
-        await limpiarStorage();
-      }
-    } else {
-      Alert.alert(
-        'Cerrar sesión',
-        '¿Deseas salir de la aplicación?',
-        [
-          { text: 'Cancelar', style: 'cancel' },
-          {
-            text: 'Sí, Salir',
-            style: 'destructive',
-            onPress: limpiarStorage
-          }
-        ]
-      );
-    }
+    // Confirmación clara antes de salir (evita cerrar sesión por un toque accidental)
+    confirmar(
+      '¿Cerrar sesión?',
+      'Para volver a entrar necesitarás tu correo y tu contraseña.',
+      'Sí, cerrar sesión',
+      limpiarStorage
+    );
   };
 
   return (

@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { ThemeProvider, DefaultTheme, DarkTheme } from '@react-navigation/native';
 import { sesionTerminada } from '../utils/api';
+import { leerTamanoLetra, aplicarTamanoLetra } from '../utils/tamanoLetra';
 
 // Pantallas que se pueden ver sin haber iniciado sesión
 const RUTAS_PUBLICAS = ['/', '/login'];
@@ -24,6 +25,8 @@ export default function RootLayout() {
     AsyncStorage.getItem('darkMode')
       .then((v) => setFondo(v === 'true' ? FONDO_OSCURO : FONDO_CLARO))
       .catch(() => {});
+    // Tamaño de letra elegido en Perfil (se aplica en todas las pantallas)
+    leerTamanoLetra().then(aplicarTamanoLetra).catch(() => {});
   }, [pathname]);
 
   useEffect(() => {
