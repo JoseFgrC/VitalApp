@@ -318,7 +318,8 @@ export default function LoginScreen() {
     const [restricciones, setRestricciones] = useState('');
     const [requiresMfa, setRequiresMfa] = useState(false);
     const [mfaToken, setMfaToken] = useState('');
-    const [tempUserId, setTempUserId] = useState<number | null>(null);
+    // Token temporal (5 min) que entrega el backend tras la contraseña; se canjea con el código de la app autenticadora
+    const [tempMfaToken, setTempMfaToken] = useState<string | null>(null);
     const router = useRouter();
 
     // ── GOOGLE SSO HOOK ───────────────────────────────────────────────────────
@@ -361,7 +362,7 @@ export default function LoginScreen() {
             if (data.success) {
                 if (data.requiresMfa) {
                     setRequiresMfa(true);
-                    setTempUserId(data.userId);
+                    setTempMfaToken(data.mfaToken);
                     return;
                 }
                 const u = data.user;
@@ -393,7 +394,7 @@ export default function LoginScreen() {
             const res = await fetchSeguro(`${API_URL}/mfa/verify-login`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ userId: tempUserId, token: mfaToken }),
+                body: JSON.stringify({ mfaToken: tempMfaToken, token: mfaToken }),
             });
             const data = await res.json();
             if (data.success) {
@@ -467,7 +468,11 @@ export default function LoginScreen() {
                 body: JSON.stringify({ token: idToken }),
             });
             const data = await res.json();
-            if (data.success) {
+            if (data.success && data.requiresMfa) {
+                // La cuenta tiene verificación en dos pasos: Google no la omite
+                setRequiresMfa(true);
+                setTempMfaToken(data.mfaToken);
+            } else if (data.success) {
                 const u = data.user;
                 await AsyncStorage.setItem('userId', u.id_usuario.toString());
                 await AsyncStorage.setItem('userName', u.nombre || '');

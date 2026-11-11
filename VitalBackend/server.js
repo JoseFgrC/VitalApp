@@ -195,14 +195,35 @@ app.use(sanitizeMiddleware);
 const JWT_SECRET = process.env.JWT_SECRET;
 const CSRF_SECRET = process.env.CSRF_SECRET;
 
+// MFA: tras validar la contraseña se entrega un token temporal (5 min) firmado con una clave
+// distinta a la de las sesiones, así que no sirve como sesión. Solo con él y el código correcto
+// de la app autenticadora se obtiene el JWT de sesión.
+const MFA_PENDIENTE_SECRET = `${JWT_SECRET}:mfa-pendiente`;
+const firmarMfaPendiente = (idUsuario) =>
+    jwt.sign({ id: idUsuario, proposito: 'mfa' }, MFA_PENDIENTE_SECRET, { expiresIn: '5m' });
+
+// Límite de intentos fallidos del código MFA por usuario (en memoria): 5 cada 10 minutos
+const MFA_MAX_FALLOS = 5;
+const MFA_VENTANA_MS = 10 * 60 * 1000;
+const fallosMfa = new Map();
+function mfaBloqueado(idUsuario) {
+    const f = fallosMfa.get(idUsuario);
+    if (!f) return false;
+    if (Date.now() - f.desde > MFA_VENTANA_MS) { fallosMfa.delete(idUsuario); return false; }
+    return f.fallos >= MFA_MAX_FALLOS;
+}
+function registrarFalloMfa(idUsuario) {
+    const f = fallosMfa.get(idUsuario);
+    if (!f || Date.now() - f.desde > MFA_VENTANA_MS) fallosMfa.set(idUsuario, { fallos: 1, desde: Date.now() });
+    else f.fallos++;
+}
+
 const openRoutes = [
     '/api/health',
     '/api/login',
     '/api/register',
-    '/api/mfa/setup',
-    '/api/mfa/enable',
+    // Segundo paso del login: aún no hay sesión, pero exige el token temporal que entrega /api/login
     '/api/mfa/verify-login',
-    '/api/mfa/disable',
     '/api/csrf-token'
 ];
 
@@ -332,7 +353,7 @@ app.post('/api/login', async (req, res) => {
         if (usuario.mfa_enabled) {
             console.log(' Login requiere MFA para:', email);
             createSession(req, res, { userId: usuario.id_usuario });
-            return res.json({ success: true, requiresMfa: true, userId: usuario.id_usuario });
+            return res.json({ success: true, requiresMfa: true, mfaToken: firmarMfaPendiente(usuario.id_usuario) });
         }
 
         const token = jwt.sign({ id: usuarioSinHash.id_usuario, email: usuarioSinHash.email, rol: usuarioSinHash.rol }, JWT_SECRET, { expiresIn: '7d' });
@@ -412,6 +433,11 @@ app.post('/api/auth/google', async (req, res) => {
             usuario = newRows[0];
         }
 
+        // Si la cuenta tiene verificación en dos pasos, Google no la omite
+        if (usuario.mfa_enabled) {
+            return res.json({ success: true, requiresMfa: true, mfaToken: firmarMfaPendiente(usuario.id_usuario) });
+        }
+
         // Generar JWT propio y responder
         const { password_hash: _, ...usuarioSinHash } = usuario;
         const jwtToken = jwt.sign(
@@ -440,13 +466,17 @@ app.post('/api/auth/google', async (req, res) => {
 // MFA (MULTI-FACTOR AUTHENTICATION)
 // ============================================
 
+// Las rutas de configuración requieren sesión y actúan SOLO sobre la cuenta del token:
+// el userId que llegue en el cuerpo se ignora (antes permitía tomar cuentas ajenas).
 app.post('/api/mfa/setup', async (req, res) => {
-    const { userId } = req.body;
-    if (!userId) return res.status(400).json({ success: false, message: 'Falta userId' });
-
+    const userId = req.user.id;
     try {
-        const secret = speakeasy.generateSecret({ name: `VitalApp (${userId})` });
-
+        const [rows] = await pool.query('SELECT mfa_enabled FROM usuarios WHERE id_usuario = ?', [userId]);
+        if (rows.length === 0) return res.status(404).json({ success: false, message: 'Usuario no encontrado' });
+        if (rows[0].mfa_enabled) {
+            return res.status(400).json({ success: false, message: 'La verificación en dos pasos ya está activada' });
+        }
+        const secret = speakeasy.generateSecret({ name: `VitalApp (${req.user.email})` });
         await pool.query('UPDATE usuarios SET mfa_secret = ? WHERE id_usuario = ?', [secret.base32, userId]);
 
         QRCode.toDataURL(secret.otpauth_url, (err, data_url) => {
@@ -460,8 +490,9 @@ app.post('/api/mfa/setup', async (req, res) => {
 });
 
 app.post('/api/mfa/enable', async (req, res) => {
-    const { userId, token } = req.body;
-    if (!userId || !token) return res.status(400).json({ success: false, message: 'Faltan datos' });
+    const userId = req.user.id;
+    const { token } = req.body;
+    if (!token) return res.status(400).json({ success: false, message: 'Falta el código' });
 
     try {
         const [rows] = await pool.query('SELECT mfa_secret FROM usuarios WHERE id_usuario = ?', [userId]);
@@ -472,7 +503,7 @@ app.post('/api/mfa/enable', async (req, res) => {
         const verified = speakeasy.totp.verify({
             secret: rows[0].mfa_secret,
             encoding: 'base32',
-            token: token
+            token: String(token)
         });
 
         if (verified) {
@@ -487,7 +518,19 @@ app.post('/api/mfa/enable', async (req, res) => {
 });
 
 app.post('/api/mfa/verify-login', async (req, res) => {
-    const { userId, token } = req.body;
+    const { mfaToken, token } = req.body;
+    // El usuario sale del token temporal (solo existe si la contraseña era correcta), no del cuerpo
+    let userId;
+    try {
+        const pendiente = jwt.verify(String(mfaToken || ''), MFA_PENDIENTE_SECRET);
+        if (pendiente.proposito !== 'mfa') throw new Error('propósito inválido');
+        userId = pendiente.id;
+    } catch (e) {
+        return res.status(401).json({ success: false, message: 'Tu verificación venció. Vuelve a iniciar sesión.' });
+    }
+    if (mfaBloqueado(userId)) {
+        return res.status(429).json({ success: false, message: 'Demasiados intentos. Espera 10 minutos y vuelve a intentarlo.' });
+    }
 
     try {
         const [rows] = await pool.query(
@@ -513,16 +556,18 @@ app.post('/api/mfa/verify-login', async (req, res) => {
         const verified = speakeasy.totp.verify({
             secret: usuario.mfa_secret,
             encoding: 'base32',
-            token: token,
+            token: String(token || ''),
             window: 1 // Permitir ligero desfase de tiempo
         });
 
         if (verified) {
+            fallosMfa.delete(userId);
             const { mfa_secret, ...usuarioLimpio } = usuario;
-            const token = jwt.sign({ id: usuarioLimpio.id_usuario, email: usuarioLimpio.email, rol: usuarioLimpio.rol }, JWT_SECRET, { expiresIn: '7d' });
+            const tokenSesion = jwt.sign({ id: usuarioLimpio.id_usuario, email: usuarioLimpio.email, rol: usuarioLimpio.rol }, JWT_SECRET, { expiresIn: '7d' });
             console.log(' MFA Login exitoso para ID:', userId);
-            res.json({ success: true, user: usuarioLimpio, token });
+            res.json({ success: true, user: usuarioLimpio, token: tokenSesion });
         } else {
+            registrarFalloMfa(userId);
             res.json({ success: false, message: 'Código incorrecto' });
         }
     } catch (e) {
@@ -532,9 +577,7 @@ app.post('/api/mfa/verify-login', async (req, res) => {
 });
 
 app.post('/api/mfa/disable', async (req, res) => {
-    const { userId } = req.body;
-    if (!userId) return res.status(400).json({ success: false, message: 'Faltan datos' });
-
+    const userId = req.user.id;
     try {
         await pool.query('UPDATE usuarios SET mfa_enabled = 0, mfa_secret = NULL WHERE id_usuario = ?', [userId]);
         console.log(' MFA Deshabilitado para ID:', userId);

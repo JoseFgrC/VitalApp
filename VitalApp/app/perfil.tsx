@@ -231,7 +231,7 @@ export default function PerfilScreen() {
             const response = await fetchSeguro(`${API_URL}/mfa/setup`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ userId: usuario.id })
+                body: JSON.stringify({})
             });
             const data = await response.json();
             if (data.success) {
@@ -258,7 +258,7 @@ export default function PerfilScreen() {
             const response = await fetchSeguro(`${API_URL}/mfa/enable`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ userId: usuario.id, token: mfaTokenInput })
+                body: JSON.stringify({ token: mfaTokenInput })
             });
             const data = await response.json();
             if (data.success) {
@@ -305,7 +305,7 @@ export default function PerfilScreen() {
             const response = await fetchSeguro(`${API_URL}/mfa/disable`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ userId: usuario.id })
+                body: JSON.stringify({})
             });
             const data = await response.json();
             if (data.success) {
