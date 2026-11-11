@@ -33,3 +33,6 @@ yarn-error.log*
 *.pfx
 **/.env.*
 !**/.env.example
+
+# Configuración local de Claude Code (no se versiona)
+.claude/settings.local.json
