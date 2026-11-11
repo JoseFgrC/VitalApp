@@ -25,3 +25,11 @@ yarn-error.log*
 **/.env
 **/dist/
 **/build/
+
+# Llaves y certificados (key.pem/cert.pem se regeneran con VitalBackend/create_cert.js)
+*.pem
+*.key
+*.p12
+*.pfx
+**/.env.*
+!**/.env.example
