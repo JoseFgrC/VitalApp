@@ -70,6 +70,8 @@ export default function EstadisticasScreen() {
         progresoSemanal: [0, 0, 0, 0, 0, 0, 0],
         esfuerzoPromedio: null as number | null,
         detenidas: 0,
+        // Meta de días por semana: los días de sus recordatorios activos, o 5 si no tiene
+        metaDias: 5,
         logros: [
             { id: 1, nombre: 'Primer paso', icono: '🌟', desbloqueado: false, condicion: 1, tipo: 'ejercicios' },
             { id: 2, nombre: '5 días seguidos', icono: '🔥', desbloqueado: false, condicion: 5, tipo: 'racha' },
@@ -143,6 +145,21 @@ export default function EstadisticasScreen() {
                 console.log('Sin conexión, mostrando progreso guardado en el teléfono:', error);
             }
 
+            // Meta de días: los días distintos de sus recordatorios activos (RF13); si no tiene, 5
+            // (la OMS recomienda actividad física la mayoría de los días de la semana)
+            let metaDias = 5;
+            try {
+                const resRec = await fetchSeguro(`${API_URL}/recordatorios`);
+                const dataRec = await resRec.json();
+                if (dataRec.success) {
+                    const dias = new Set<string>();
+                    (dataRec.recordatorios || []).filter((r: any) => r.activo).forEach((r: any) => r.dias.forEach((d: string) => dias.add(d)));
+                    if (dias.size > 0) metaDias = dias.size;
+                }
+            } catch (error) {
+                console.log('No se pudieron leer los recordatorios para la meta:', error);
+            }
+
             // Meta: totalGoal es la meta semanal, weeklyGoal es lo logrado
             const metaTotal = stats ? (stats.totalGoal || 3) : 3;
             const hydrationStr = await AsyncStorage.getItem('userHydration');
@@ -171,6 +188,7 @@ export default function EstadisticasScreen() {
                 progresoSemanal,
                 esfuerzoPromedio,
                 detenidas,
+                metaDias,
                 logros: logrosActualizados
             });
 
@@ -225,6 +243,9 @@ export default function EstadisticasScreen() {
         );
     }
 
+    // Días distintos de esta semana con al menos un ejercicio completado
+    const diasConEjercicio = (estadisticas.progresoSemanal || []).filter((n: number) => n > 0).length;
+
     return (
         <SafeAreaView style={[styles.safeArea, { backgroundColor: colors.bg }]}>
             <StatusBar barStyle={colors.statusBarStyle} backgroundColor={colors.gradientStart} />
@@ -268,6 +289,55 @@ export default function EstadisticasScreen() {
                         ))}
                     </View>
                 </LinearGradient>
+
+                {/* Resumen en frases con números grandes (accesibilidad para adultos mayores) */}
+                <View style={[styles.resumen, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}>
+                    <Text style={[styles.resumenTitulo, { color: colors.text }]}>Tu resumen</Text>
+                    {[
+                        {
+                            icono: 'calendar',
+                            color: '#1D4ED8',
+                            numero: `${diasConEjercicio} de ${estadisticas.metaDias}`,
+                            frase: `Esta semana hiciste ejercicio ${diasConEjercicio} de ${estadisticas.metaDias} días.`,
+                            extra: diasConEjercicio >= estadisticas.metaDias ? '¡Cumpliste tu meta de la semana!' : diasConEjercicio > 0 ? `Te faltan ${estadisticas.metaDias - diasConEjercicio} ${estadisticas.metaDias - diasConEjercicio === 1 ? 'día' : 'días'} para tu meta.` : 'Hoy es un buen día para empezar.',
+                        },
+                        {
+                            icono: 'flame',
+                            color: '#B45309',
+                            numero: `${estadisticas.racha}`,
+                            frase: estadisticas.racha === 1 ? 'Llevas 1 día seguido haciendo ejercicio.' : `Llevas ${estadisticas.racha} días seguidos haciendo ejercicio.`,
+                        },
+                        {
+                            icono: 'time',
+                            color: '#047857',
+                            numero: `${estadisticas.minutos}`,
+                            frase: `En total llevas ${estadisticas.minutos} ${estadisticas.minutos === 1 ? 'minuto' : 'minutos'} de ejercicio.`,
+                        },
+                        {
+                            icono: 'checkmark-done',
+                            color: '#6D28D9',
+                            numero: `${estadisticas.completados}`,
+                            frase: `Has completado ${estadisticas.completados} ${estadisticas.completados === 1 ? 'ejercicio' : 'ejercicios'}.`,
+                        },
+                        ...(estadisticas.esfuerzoPromedio !== null ? [{
+                            icono: 'happy',
+                            color: '#0E7490',
+                            numero: comoTeSientes(estadisticas.esfuerzoPromedio).palabra,
+                            frase: `En promedio, los ejercicios te han parecido ${comoTeSientes(estadisticas.esfuerzoPromedio).frase}.`,
+                        }] : []),
+                    ].map((item, i) => (
+                        <View key={i} style={[styles.resumenFila, { borderTopColor: colors.cardBorder }, i === 0 && { borderTopWidth: 0 }]}>
+                            <View style={[styles.resumenIcono, { backgroundColor: item.color + '1A' }]}>
+                                <Ionicons name={item.icono as any} size={30} color={item.color} />
+                            </View>
+                            <View style={{ flex: 1 }}>
+                                <Text style={[styles.resumenNumero, { color: colors.isDark ? '#FFFFFF' : item.color }]}>{item.numero}</Text>
+                                <Text style={[styles.resumenFrase, { color: colors.text }]}>{item.frase}</Text>
+                                {item.extra ? <Text style={[styles.resumenFrase, { color: colors.textSecondary }]}>{item.extra}</Text> : null}
+                            </View>
+                        </View>
+                    ))}
+                </View>
 
                 {/* Tarjeta de Progreso General */}
                 <View style={[styles.progressCard, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}>
@@ -455,7 +525,22 @@ export default function EstadisticasScreen() {
     );
 }
 
+// Esfuerzo percibido (0–10) en palabras sencillas
+function comoTeSientes(promedio: number) {
+    if (promedio <= 2) return { palabra: 'Muy ligero', frase: 'muy ligeros' };
+    if (promedio <= 4) return { palabra: 'Ligero', frase: 'ligeros' };
+    if (promedio <= 6) return { palabra: 'Moderado', frase: 'moderados' };
+    if (promedio <= 8) return { palabra: 'Fuerte', frase: 'fuertes' };
+    return { palabra: 'Muy fuerte', frase: 'muy fuertes' };
+}
+
 const styles = StyleSheet.create({
+    resumen: { marginHorizontal: 20, marginTop: 16, marginBottom: 8, padding: 20, borderRadius: 24, borderWidth: 2 },
+    resumenTitulo: { fontSize: 26, fontWeight: '900', marginBottom: 8 },
+    resumenFila: { flexDirection: 'row', alignItems: 'center', gap: 16, paddingVertical: 14, borderTopWidth: 1 },
+    resumenIcono: { width: 56, height: 56, borderRadius: 28, alignItems: 'center', justifyContent: 'center' },
+    resumenNumero: { fontSize: 34, fontWeight: '900', lineHeight: 40 },
+    resumenFrase: { fontSize: 19, lineHeight: 26 },
     safeArea: { flex: 1, backgroundColor: '#F8FAFC' },
     container: { flex: 1 },
     scrollContent: { paddingBottom: 100 },
