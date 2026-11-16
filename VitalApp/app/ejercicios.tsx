@@ -201,8 +201,11 @@ export default function EjerciciosScreen() {
             
             <ScrollView 
                 style={styles.container}
-                contentContainerStyle={styles.scrollContent}
-                showsVerticalScrollIndicator={false}
+                contentContainerStyle={[styles.scrollContent, { flexGrow: 1, paddingBottom: 120 }]}
+                showsVerticalScrollIndicator={true}
+                bounces={true}
+                overScrollMode="always"
+                keyboardShouldPersistTaps="handled"
             >
                 {/* Cabecera Premium */}
                 <LinearGradient

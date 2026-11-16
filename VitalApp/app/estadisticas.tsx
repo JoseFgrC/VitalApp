@@ -254,8 +254,11 @@ export default function EstadisticasScreen() {
             <StatusBar barStyle={colors.statusBarStyle} backgroundColor={colors.gradientStart} />
             <ScrollView 
                 style={[styles.container, { backgroundColor: colors.bg }]}
-                contentContainerStyle={styles.scrollContent}
-                showsVerticalScrollIndicator={false}
+                contentContainerStyle={[styles.scrollContent, { flexGrow: 1, paddingBottom: 120 }]}
+                showsVerticalScrollIndicator={true}
+                bounces={true}
+                overScrollMode="always"
+                keyboardShouldPersistTaps="handled"
             >
                 {/* Header Premium */}
                 <LinearGradient

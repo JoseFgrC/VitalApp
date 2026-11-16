@@ -335,8 +335,11 @@ export default function PerfilScreen() {
 
             <ScrollView
                 style={[styles.container, { backgroundColor: colors.bg }]}
-                contentContainerStyle={styles.scrollContent}
-                showsVerticalScrollIndicator={false}
+                contentContainerStyle={[styles.scrollContent, { flexGrow: 1, paddingBottom: 130 }]}
+                showsVerticalScrollIndicator={true}
+                bounces={true}
+                overScrollMode="always"
+                keyboardShouldPersistTaps="handled"
             >
                 {/* Header Premium y Avatar */}
                 <LinearGradient

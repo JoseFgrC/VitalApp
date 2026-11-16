@@ -112,8 +112,12 @@ export default function EnfermedadesScreen() {
     <SafeAreaView style={[styles.safeArea, { backgroundColor: colors.bg }]}>
       <StatusBar barStyle={colors.statusBarStyle} backgroundColor={colors.gradientStart} />
       <ScrollView
-        contentContainerStyle={styles.content}
-        showsVerticalScrollIndicator={false}
+        style={{ flex: 1, width: '100%' }}
+        contentContainerStyle={[styles.content, { flexGrow: 1, paddingBottom: 130 }]}
+        showsVerticalScrollIndicator={true}
+        bounces={true}
+        overScrollMode="always"
+        keyboardShouldPersistTaps="handled"
       >
         <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}>
           <Text style={[styles.title, { color: colors.text }]} accessibilityRole="header">Mi salud</Text>

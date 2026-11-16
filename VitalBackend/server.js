@@ -146,9 +146,29 @@ function sanitizeMiddleware(req, res, next) {
 // ============================================
 const HMAC_SECRET = process.env.HMAC_SECRET;
 
+// Rutas públicas que NO requieren firma HMAC (no hay sesión aún)
+const OPEN_HMAC_ROUTES = [
+    '/login',
+    '/register',
+    '/mfa/verify-login',
+    '/auth/google',
+    '/csrf-token',
+    '/health',
+    '/api/login',
+    '/api/register',
+    '/api/mfa/verify-login',
+    '/api/auth/google',
+    '/api/csrf-token',
+    '/api/health'
+];
+
 function verificarFirma(req, res, next) {
     // Solo verificar en métodos que envían cuerpo
     if (!['POST', 'PUT', 'DELETE'].includes(req.method)) return next();
+
+    // Rutas públicas quedan exentas de HMAC (comprobar req.path y req.originalUrl)
+    const urlOriginal = (req.originalUrl || req.url || '').split('?')[0];
+    if (OPEN_HMAC_ROUTES.includes(req.path) || OPEN_HMAC_ROUTES.includes(urlOriginal)) return next();
 
     const firma = req.headers['x-signature'];
 

@@ -121,7 +121,14 @@ export default function CuidadorScreen() {
         return (
             <SafeAreaView style={[styles.safeArea, { backgroundColor: colors.bg }]}>
                 <StatusBar barStyle={colors.statusBarStyle} backgroundColor={colors.bg} />
-                <ScrollView contentContainerStyle={styles.contenido}>
+                <ScrollView 
+                    style={{ flex: 1, width: '100%' }}
+                    contentContainerStyle={[styles.contenido, { flexGrow: 1, paddingBottom: 130 }]}
+                    showsVerticalScrollIndicator={true}
+                    bounces={true}
+                    overScrollMode="always"
+                    keyboardShouldPersistTaps="handled"
+                >
                     <View style={styles.webContainer}>
                         <TouchableOpacity style={styles.volver} onPress={() => setSeleccionado(null)}>
                             <Ionicons name="arrow-back" size={28} color={colors.text} />
@@ -210,7 +217,12 @@ export default function CuidadorScreen() {
         <SafeAreaView style={[styles.safeArea, { backgroundColor: colors.bg }]}>
             <StatusBar barStyle={colors.statusBarStyle} backgroundColor={colors.bg} />
             <ScrollView
-                contentContainerStyle={styles.contenido}
+                style={{ flex: 1, width: '100%' }}
+                contentContainerStyle={[styles.contenido, { flexGrow: 1, paddingBottom: 130 }]}
+                showsVerticalScrollIndicator={true}
+                bounces={true}
+                overScrollMode="always"
+                keyboardShouldPersistTaps="handled"
                 refreshControl={<RefreshControl refreshing={false} onRefresh={cargarAdultos} />}
             >
                 <View style={styles.webContainer}>

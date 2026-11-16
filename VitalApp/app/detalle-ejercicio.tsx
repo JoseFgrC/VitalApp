@@ -381,7 +381,14 @@ export default function DetalleEjercicioScreen() {
                 <View style={{ width: 44 }} />
             </View>
 
-            <ScrollView style={styles.container} showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
+            <ScrollView 
+                style={styles.container} 
+                showsVerticalScrollIndicator={true}
+                bounces={true}
+                overScrollMode="always"
+                keyboardShouldPersistTaps="handled"
+                contentContainerStyle={[styles.scrollContent, { flexGrow: 1, paddingBottom: 130 }]}
+            >
                 <View style={styles.webContainer}>
                 {/* Aviso de seguridad previo: el video no aparece hasta aceptarlo */}
                 {!seguridadAceptada ? (

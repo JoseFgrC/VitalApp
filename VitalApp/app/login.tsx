@@ -13,7 +13,7 @@ import * as Google from 'expo-auth-session/providers/google';
 
 WebBrowser.maybeCompleteAuthSession();
 
-// Inyectar CSS global para quitar márgenes del navegador (solo web)
+// Inyectar CSS global para normalizar web
 if (Platform.OS === 'web' && typeof document !== 'undefined') {
     const styleId = 'vitalapp-login-fullscreen';
     if (!document.getElementById(styleId)) {
@@ -25,7 +25,6 @@ if (Platform.OS === 'web' && typeof document !== 'undefined') {
                 padding: 0 !important;
                 width: 100% !important;
                 height: 100% !important;
-                overflow: hidden;
                 background-color: #03071E;
             }
             #root {
@@ -33,7 +32,8 @@ if (Platform.OS === 'web' && typeof document !== 'undefined') {
                 padding: 0 !important;
                 width: 100% !important;
                 height: 100% !important;
-                display: flex;
+                display: flex !important;
+                flex-direction: column !important;
             }
         `;
         document.head.appendChild(style);
@@ -519,15 +519,16 @@ export default function LoginScreen() {
         <Background>
             <KeyboardAvoidingView
                 behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-                style={{ flex: 1 }}
+                style={{ flex: 1, width: '100%' }}
                 keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
             >
                 <ScrollView
-                    // El registro es más alto que la pantalla: centrado vertical recortaría la parte de arriba en web
-                    contentContainerStyle={[st.scroll, isRegistering && { justifyContent: 'flex-start' }]}
-                    showsVerticalScrollIndicator={false}
+                    style={{ flex: 1, width: '100%' }}
+                    contentContainerStyle={[st.scroll, { flexGrow: 1, paddingBottom: 60 }, isRegistering && { justifyContent: 'flex-start' }]}
+                    showsVerticalScrollIndicator={true}
                     keyboardShouldPersistTaps="handled"
-                    bounces={false}
+                    bounces={true}
+                    overScrollMode="always"
                 >
                     {/* Logo */}
                     <View style={st.logoZone}>
@@ -721,14 +722,11 @@ const st = StyleSheet.create({
     avisoSesionTxt: { flex: 1, color: '#FDE68A', fontSize: 18, fontWeight: '600', lineHeight: 24 },
     root: {
         flex: 1,
+        width: '100%',
+        height: '100%',
         backgroundColor: '#03071E',
-        overflow: 'hidden' as any,
         ...(isWeb ? {
-            position: 'fixed' as any,
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
+            position: 'relative' as any,
             width: '100vw' as any,
             height: '100vh' as any,
             zIndex: 1,
