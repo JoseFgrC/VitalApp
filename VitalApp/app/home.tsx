@@ -607,8 +607,11 @@ export default function HomeScreen() {
       <StatusBar barStyle={colors.statusBarStyle} backgroundColor={colors.gradientStart} />
       <ScrollView 
         style={[styles.container, { backgroundColor: colors.bg }]} 
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={true}
+        bounces={true}
+        overScrollMode="always"
+        keyboardShouldPersistTaps="handled"
+        contentContainerStyle={[styles.scrollContent, { flexGrow: 1, paddingBottom: 120 }]}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={['#2563EB']} />
         }

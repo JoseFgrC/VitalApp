@@ -140,7 +140,14 @@ export default function ValoracionScreen() {
         return (
             <SafeAreaView style={[styles.safeArea, { backgroundColor: colors.bg }]}>
                 <StatusBar barStyle={colors.statusBarStyle} backgroundColor={colors.bg} />
-                <ScrollView contentContainerStyle={styles.contenido}>
+                <ScrollView 
+                    style={{ flex: 1, width: '100%' }}
+                    contentContainerStyle={[styles.contenido, { flexGrow: 1, paddingBottom: 130 }]}
+                    showsVerticalScrollIndicator={true}
+                    bounces={true}
+                    overScrollMode="always"
+                    keyboardShouldPersistTaps="handled"
+                >
                     <View style={styles.webContainer}>
                         <Text style={[styles.titulo, { color: colors.text }]}>Tu nivel funcional</Text>
                         <View style={[styles.tarjetaNivel, { borderColor: info.color, backgroundColor: colors.card }]}>
@@ -166,7 +173,14 @@ export default function ValoracionScreen() {
     return (
         <SafeAreaView style={[styles.safeArea, { backgroundColor: colors.bg }]}>
             <StatusBar barStyle={colors.statusBarStyle} backgroundColor={colors.bg} />
-            <ScrollView contentContainerStyle={styles.contenido}>
+            <ScrollView 
+                style={{ flex: 1, width: '100%' }}
+                contentContainerStyle={[styles.contenido, { flexGrow: 1, paddingBottom: 130 }]}
+                showsVerticalScrollIndicator={true}
+                bounces={true}
+                overScrollMode="always"
+                keyboardShouldPersistTaps="handled"
+            >
                 <View style={styles.webContainer}>
                     <Ionicons name="clipboard" size={52} color="#2563EB" style={{ alignSelf: 'center' }} />
                     <Text style={[styles.titulo, { color: colors.text }]}>Valoración inicial</Text>

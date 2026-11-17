@@ -159,7 +159,14 @@ export default function MisDatosScreen() {
     return (
         <SafeAreaView style={[styles.safeArea, { backgroundColor: colors.bg }]}>
             <StatusBar barStyle={colors.statusBarStyle} backgroundColor={colors.bg} />
-            <ScrollView contentContainerStyle={styles.contenido}>
+            <ScrollView 
+                style={{ flex: 1, width: '100%' }}
+                contentContainerStyle={[styles.contenido, { flexGrow: 1, paddingBottom: 130 }]}
+                showsVerticalScrollIndicator={true}
+                bounces={true}
+                overScrollMode="always"
+                keyboardShouldPersistTaps="handled"
+            >
                 <View style={styles.webContainer}>
                     <TouchableOpacity style={styles.volver} onPress={() => router.canGoBack() ? router.back() : router.replace('/perfil')}>
                         <Ionicons name="arrow-back" size={28} color={colors.text} />

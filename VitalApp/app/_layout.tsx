@@ -5,6 +5,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { ThemeProvider, DefaultTheme, DarkTheme } from '@react-navigation/native';
 import { sesionTerminada } from '../utils/api';
 import { leerTamanoLetra, aplicarTamanoLetra } from '../utils/tamanoLetra';
+import AlarmaGlobal from '../components/AlarmaGlobal';
 
 // Pantallas que se pueden ver sin haber iniciado sesión
 const RUTAS_PUBLICAS = ['/', '/login'];
@@ -32,6 +33,54 @@ export default function RootLayout() {
   useEffect(() => {
     if (Platform.OS === 'web' && typeof document !== 'undefined') {
       document.body.style.backgroundColor = fondo;
+      const styleId = 'vitalapp-global-web-scroll';
+      if (!document.getElementById(styleId)) {
+        const style = document.createElement('style');
+        style.id = styleId;
+        style.textContent = `
+          html, body {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            touch-action: pan-y;
+            -webkit-overflow-scrolling: touch;
+          }
+          #root {
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            touch-action: pan-y;
+          }
+          /* Scroll fluido y visible para web y móvil */
+          div[style*="overflow-y: auto"],
+          div[style*="overflow: auto"],
+          [data-radix-scroll-area-viewport] {
+            touch-action: pan-y !important;
+            -webkit-overflow-scrolling: touch !important;
+            overscroll-behavior-y: contain !important;
+            scroll-behavior: smooth;
+          }
+          ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+          }
+          ::-webkit-scrollbar-track {
+            background: transparent;
+          }
+          ::-webkit-scrollbar-thumb {
+            background: rgba(148, 163, 184, 0.5);
+            border-radius: 999px;
+          }
+          ::-webkit-scrollbar-thumb:hover {
+            background: rgba(37, 99, 235, 0.75);
+          }
+        `;
+        document.head.appendChild(style);
+      }
     }
   }, [fondo]);
 
@@ -77,11 +126,13 @@ export default function RootLayout() {
       ...(fondo === FONDO_OSCURO ? DarkTheme : DefaultTheme),
       colors: { ...(fondo === FONDO_OSCURO ? DarkTheme : DefaultTheme).colors, background: fondo },
     }}>
-    <View style={{ flex: 1, backgroundColor: fondo }}>
+    <View style={{ flex: 1, height: '100%', backgroundColor: fondo }}>
     <Stack 
       screenOptions={{ 
         headerShown: false,
         contentStyle: {
+          flex: 1,
+          height: '100%',
           maxWidth: isDesktop ? 1200 : '100%',
           alignSelf: 'center',
           width: '100%',
@@ -93,6 +144,8 @@ export default function RootLayout() {
         name="login" 
         options={{
           contentStyle: {
+            flex: 1,
+            height: '100%',
             maxWidth: '100%',
             width: '100%',
             alignSelf: 'stretch',
@@ -114,6 +167,7 @@ export default function RootLayout() {
         options={{ presentation: 'modal' }} 
       />
     </Stack>
+    <AlarmaGlobal />
     </View>
     </ThemeProvider>
   );

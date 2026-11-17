@@ -83,7 +83,14 @@ export default function ConsentimientoScreen() {
     return (
         <SafeAreaView style={[styles.safeArea, { backgroundColor: colors.bg }]}>
             <StatusBar barStyle={colors.statusBarStyle} backgroundColor={colors.bg} />
-            <ScrollView contentContainerStyle={styles.contenido}>
+            <ScrollView 
+                style={{ flex: 1, width: '100%' }}
+                contentContainerStyle={[styles.contenido, { flexGrow: 1, paddingBottom: 130 }]}
+                showsVerticalScrollIndicator={true}
+                bounces={true}
+                overScrollMode="always"
+                keyboardShouldPersistTaps="handled"
+            >
                 <View style={styles.webContainer}>
                     <Ionicons name="shield-checkmark" size={56} color="#2563EB" style={{ alignSelf: 'center' }} />
                     <Text style={[styles.titulo, { color: colors.text }]}>Aviso de privacidad</Text>
