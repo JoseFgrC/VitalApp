@@ -77,10 +77,19 @@ export default function PerfilScreen() {
             const edad = await AsyncStorage.getItem('userAge');
             const puntos = await AsyncStorage.getItem('userPoints');
 
-            // Cargar estadísticas reales
-            const statsStr = await AsyncStorage.getItem('userStats');
-            const rachaStr = await AsyncStorage.getItem('streakDays');
-            const stats = statsStr ? JSON.parse(statsStr) : null;
+            // Ejercicios y racha de ESTA cuenta, desde la BD (RF11)
+            let ejerciciosBD = 0;
+            let rachaBD = 0;
+            try {
+                const resProg = await fetchSeguro(`${API_URL}/progreso`);
+                const dataProg = await resProg.json();
+                if (dataProg.success) {
+                    ejerciciosBD = Number(dataProg.totales?.completadas) || 0;
+                    rachaBD = Number(dataProg.racha) || 0;
+                }
+            } catch (error) {
+                console.log('No se pudo leer el progreso de la BD:', error);
+            }
 
             // Cargar preferencias
             const temaGuardado = await AsyncStorage.getItem('darkMode');
@@ -120,8 +129,8 @@ export default function PerfilScreen() {
                 email: emailBackend,
                 edad: edadBackend,
                 peso: pesoBackend,
-                ejerciciosCompletados: stats ? stats.exercises : 0,
-                rachaDias: parseInt(rachaStr || '0')
+                ejerciciosCompletados: ejerciciosBD,
+                rachaDias: rachaBD
             });
 
             if (notifGuardadas !== null) setNotificaciones(notifGuardadas === 'true');

@@ -109,6 +109,11 @@ function obtenerPasos(nombre: string): string[] {
     return pasos;
 }
 
+// Estimación sencilla para ejercicio suave en adultos mayores: unas 3.5 kcal por minuto
+function caloriasPorSegundos(segundos: number): number {
+    return Math.round((segundos / 60) * 3.5);
+}
+
 export default function DetalleEjercicioScreen() {
     const params = useLocalSearchParams();
     const router = useRouter();
@@ -186,7 +191,8 @@ export default function DetalleEjercicioScreen() {
                     id_video: ejercicio.idVideo,
                     nombre_ejercicio: ejercicio.nombre,
                     duracion_segundos: Math.round(segundosVistos),
-                    calorias_quemadas: completada ? Math.max(5, Math.floor(ejercicio.duracion / 60) * 4) : null,
+                    // Calorías según el tiempo real de la sesión, no la duración planeada del video
+                    calorias_quemadas: completada ? caloriasPorSegundos(segundosVistos) : null,
                     nivel_esfuerzo: esfuerzo,
                     completado: completada ? 1 : 0,
                     comentarios,
@@ -228,12 +234,10 @@ export default function DetalleEjercicioScreen() {
 
     const [celebrationVisible, setCelebrationVisible] = useState(false);
 
+    // Se llama después de guardar la sesión (botón de la celebración). El tiempo mínimo ya se
+    // revisó en handleCompletar; volver a revisarlo aquí dejaba al usuario atascado en el mismo
+    // ejercicio cuando usaba «Ya terminé», y la rutina volvía a empezar por el primero.
     const irAlSiguiente = () => {
-        if (segundosVistos < TIEMPO_MINIMO) {
-            console.log('Video terminado demasiado pronto, no se avanza automáticamente');
-            return;
-        }
-
         if (routineData && currentIndex < routineData.exercises.length - 1) {
             const nextIndex = currentIndex + 1;
             const nextExercise = routineData.exercises[nextIndex];
@@ -269,55 +273,8 @@ export default function DetalleEjercicioScreen() {
         }
 
         setCompletado(true);
-        try {
-            // Actualizar estadísticas en AsyncStorage
-            const statsStr = await AsyncStorage.getItem('userStats');
-            const stats = statsStr ? JSON.parse(statsStr) : {
-                exercises: 0, calories: 0, minutes: 0,
-                weeklyGoal: 0, totalGoal: 3, challenge: '7X4'
-            };
-
-            const duracionMin = Math.floor(ejercicio.duracion / 60);
-            const caloriasEstimadas = duracionMin * 3; // ~3 cal/min for light exercise
-
-            stats.exercises += 1;
-            stats.calories += caloriasEstimadas;
-            stats.minutes += duracionMin;
-            stats.weeklyGoal = Math.min(stats.weeklyGoal + 1, stats.totalGoal);
-
-            await AsyncStorage.setItem('userStats', JSON.stringify(stats));
-
-            // Actualizar completados hoy
-            const hoyStr = await AsyncStorage.getItem('completadosHoy');
-            const hoy = parseInt(hoyStr || '0') + 1;
-            await AsyncStorage.setItem('completadosHoy', hoy.toString());
-
-            // Actualizar historial semanal
-            const historialStr = await AsyncStorage.getItem('weeklyHistory');
-            let historial = historialStr ? JSON.parse(historialStr) : [0, 0, 0, 0, 0, 0, 0];
-            const dayIndex = new Date().getDay();
-            historial[dayIndex] = hoy;
-            await AsyncStorage.setItem('weeklyHistory', JSON.stringify(historial));
-
-            // Actualizar racha
-            const lastDateStr = await AsyncStorage.getItem('lastExerciseDate');
-            const today = new Date().toDateString();
-            if (lastDateStr !== today) {
-                const yesterday = new Date();
-                yesterday.setDate(yesterday.getDate() - 1);
-                const rachaStr = await AsyncStorage.getItem('streakDays');
-                let racha = parseInt(rachaStr || '0');
-                if (lastDateStr === yesterday.toDateString()) {
-                    racha += 1;
-                } else {
-                    racha = 1;
-                }
-                await AsyncStorage.setItem('streakDays', racha.toString());
-                await AsyncStorage.setItem('lastExerciseDate', today);
-            }
-        } catch (error) {
-            console.log('Error guardando progreso:', error);
-        }
+        // El progreso (ejercicios, minutos, calorías, racha) se guarda solo en la BD al elegir el
+        // esfuerzo percibido; todas las pantallas lo leen de ahí para que sea el de esta cuenta.
 
         // Antes de celebrar se pide el esfuerzo percibido; al elegirlo se guarda la sesión
         setEsfuerzoVisible(true);
@@ -574,7 +531,8 @@ export default function DetalleEjercicioScreen() {
                     ]}
                     onPress={() => {
                         if (completado) {
-                            if (router.canGoBack()) router.back();
+                            if (routineData) irAlSiguiente();
+                            else if (router.canGoBack()) router.back();
                             else router.replace('/(tabs)/ejercicios');
                         } else {
                             handleCompletar(false);
@@ -592,8 +550,8 @@ export default function DetalleEjercicioScreen() {
                             color="#FFFFFF" 
                         />
                         <Text style={styles.mainButtonText}>
-                            {completado 
-                                ? 'Ejercicio completado' 
+                            {completado
+                                ? (routineData && currentIndex < routineData.exercises.length - 1 ? 'Siguiente ejercicio' : 'Ejercicio completado')
                                 : segundosVistos < TIEMPO_MINIMO 
                                     ? `Tiempo restante (${TIEMPO_MINIMO - segundosVistos}s)`
                                     : (routineData ? 'Siguiente ejercicio' : 'Marcar como completado')
@@ -758,11 +716,11 @@ export default function DetalleEjercicioScreen() {
                             
                             <View style={styles.statsRow}>
                                 <View style={styles.miniStat}>
-                                    <Text style={styles.miniStatValue}>+{Math.floor(ejercicio.duracion / 60)}</Text>
+                                    <Text style={styles.miniStatValue}>+{Math.round(segundosVistos / 60)}</Text>
                                     <Text style={styles.miniStatLabel}>Min</Text>
                                 </View>
                                 <View style={styles.miniStat}>
-                                    <Text style={styles.miniStatValue}>+{Math.max(5, Math.floor(ejercicio.duracion / 60) * 4)}</Text>
+                                    <Text style={styles.miniStatValue}>+{caloriasPorSegundos(segundosVistos)}</Text>
                                     <Text style={styles.miniStatLabel}>Kcal</Text>
                                 </View>
                             </View>

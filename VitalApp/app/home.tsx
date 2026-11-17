@@ -12,6 +12,7 @@ import { useTheme } from '../hooks/useTheme';
 import { getVideoIdForExercise, DAILY_TIPS } from '../constants/exercises';
 import { API_URL } from '../constants/config';
 import { fetchSeguro } from '../utils/api';
+import { inicioDeSemana, metaDiasSemana, META_DIAS_POR_DEFECTO } from '../utils/metas';
 
 
 import { avisar, confirmar } from '../utils/dialogos';
@@ -64,14 +65,6 @@ function calcularProximo(recordatorios: { hora: string; dias: string[]; activo: 
   }
   return null;
 }
-// Lunes 00:00 de la semana de la fecha dada
-function inicioDeSemana(fecha: Date): Date {
-  const d = new Date(fecha);
-  d.setHours(0, 0, 0, 0);
-  d.setDate(d.getDate() - ((d.getDay() + 6) % 7));
-  return d;
-}
-
 export default function HomeScreen() {
   const router = useRouter();
   const { colors } = useTheme();
@@ -80,6 +73,7 @@ export default function HomeScreen() {
   const [diasConEjercicio, setDiasConEjercicio] = useState<string[]>([]);
   // Totales de esta semana, también desde la BD
   const [semana, setSemana] = useState({ ejercicios: 0, calorias: 0, minutos: 0 });
+  const [metaDias, setMetaDias] = useState(META_DIAS_POR_DEFECTO);
   const [peso, setPeso] = useState(58);
   const [nombreUsuario, setNombreUsuario] = useState('Usuario');
   const [userId, setUserId] = useState<string | null>(null);   // id_usuario de la BD
@@ -193,7 +187,10 @@ export default function HomeScreen() {
       try {
         const resRec = await fetchSeguro(`${API_URL}/recordatorios`);
         const dataRec = await resRec.json();
-        if (dataRec.success) setProximoRecordatorio(calcularProximo(dataRec.recordatorios || []));
+        if (dataRec.success) {
+          setProximoRecordatorio(calcularProximo(dataRec.recordatorios || []));
+          setMetaDias(metaDiasSemana(dataRec.recordatorios));
+        }
       } catch (error) {
         setProximoRecordatorio(null);
       }
@@ -474,8 +471,8 @@ export default function HomeScreen() {
       futuro: d > today
     };
   });
-  // Meta semanal: hacer ejercicio al menos 3 días (OMS: actividad multicomponente 3 o más días por semana)
-  const META_DIAS = 3;
+  // Meta semanal: días de sus recordatorios o, si no tiene, 3 (OMS); misma regla que Mi progreso
+  const META_DIAS = metaDias;
   const diasHechos = diasConEjercicio.length;
   const progressPercentage = Math.round((Math.min(diasHechos, META_DIAS) / META_DIAS) * 100);
 
@@ -496,9 +493,13 @@ export default function HomeScreen() {
       }
     : { name: ex.name, url: getVideoIdForExercise(ex.name), duracion: '300' };
 
+  // Empieza en el primer ejercicio de la rutina que aún no se hizo hoy (si sale a medias, continúa)
+  const indicePendiente = Math.max(0, currentWorkout.exercises.findIndex(
+    (ex: any) => !hechosHoy.includes(ex.name.toLowerCase())));
+
   const iniciarEntrenamiento = async () => {
     const ejercicios = currentWorkout.exercises.map(datosEjercicioRutina);
-    const primero = ejercicios[0];
+    const primero = ejercicios[indicePendiente];
     const rutinaParaReproductor = { title: currentWorkout.title, exercises: ejercicios };
 
     router.push({
@@ -514,7 +515,7 @@ export default function HomeScreen() {
         fuente: primero.fuente ?? '',
         contraindicaciones: primero.contraindicaciones ?? '',
         routine: JSON.stringify(rutinaParaReproductor),
-        index: '0'
+        index: String(indicePendiente)
       }
     });
   };
@@ -704,7 +705,7 @@ export default function HomeScreen() {
                   accessibilityHint={`${currentWorkout.title.toLowerCase()}, ${currentWorkout.exercises.length} ejercicios`}
                 >
                   <Ionicons name="play-circle" size={34} color="#FFFFFF" />
-                  <Text style={styles.planHoyBotonTexto}>Hacer mi rutina de hoy</Text>
+                  <Text style={styles.planHoyBotonTexto}>{ejerciciosHechos > 0 ? 'Continuar mi rutina' : 'Hacer mi rutina de hoy'}</Text>
                 </TouchableOpacity>
               )}
               <Text style={[styles.planHoyTexto, { color: colors.textSecondary, marginTop: 10, marginBottom: 0 }]}>
@@ -740,7 +741,7 @@ export default function HomeScreen() {
               <Text style={[styles.bannerTitle, { color: colors.text }]}>Tu progreso diario</Text>
               <Text style={[styles.bannerSubtitle, { color: colors.textSecondary }]}>
                 {completadosHoy > 0
-                  ? `Hoy completaste ${completadosHoy} ${completadosHoy === 1 ? 'ejercicio' : 'ejercicios'}. ¡Sigue así!`
+                  ? `Hoy completaste ${completadosHoy} ${completadosHoy === 1 ? 'ejercicio' : 'ejercicios'}: ${ejerciciosHechos} de ${currentWorkout.exercises.length} de tu rutina.`
                   : 'Aún no haces ejercicio hoy. Un poco de movimiento hace una gran diferencia.'}
               </Text>
             </View>
@@ -807,12 +808,14 @@ export default function HomeScreen() {
                         <Ionicons name="flash" size={24} color="#FFFFFF" />
                     </View>
                     <View style={styles.challengeTextGroup}>
-                        <Text style={[styles.challengeTitle, { color: colors.isDark ? '#E0E7FF' : '#1E1B4B' }]}>Desafío del Día</Text>
+                        <Text style={[styles.challengeTitle, { color: colors.isDark ? '#E0E7FF' : '#1E1B4B' }]}>Meta de hoy</Text>
                         <Text style={[styles.challengeDesc, { color: colors.isDark ? '#C7D2FE' : '#4338CA' }]}>
-                            {completadosHoy >= 2 ? '¡Desafío completado!' : 'Completa 2 ejercicios hoy'}
+                            {rutinaCompletada
+                              ? '¡Terminaste tu rutina de hoy!'
+                              : `Haz los ${currentWorkout.exercises.length} ejercicios de tu rutina (nivel ${NIVEL_EN_PALABRAS[nivelPermitido]?.nombre ?? nivelPermitido})`}
                         </Text>
                     </View>
-                    {completadosHoy >= 2 && (
+                    {rutinaCompletada && (
                         <View style={styles.completedBadge}>
                             <Ionicons name="checkmark-circle" size={24} color="#10B981" />
                         </View>
@@ -821,18 +824,20 @@ export default function HomeScreen() {
                 
                 <View style={styles.challengeProgressRow}>
                     <View style={styles.challengeDots}>
-                        {[1, 2].map((i) => (
-                            <View 
-                                key={i} 
+                        {currentWorkout.exercises.map((ex: any, i: number) => (
+                            <View
+                                key={i}
                                 style={[
-                                    styles.challengeDot, 
-                                    completadosHoy >= i ? { backgroundColor: '#4F46E5' } : { backgroundColor: colors.isDark ? '#4338CA' : '#C7D2FE' }
-                                ]} 
+                                    styles.challengeDot,
+                                    hechosHoy.includes(ex.name.toLowerCase())
+                                      ? { backgroundColor: colors.isDark ? '#A5B4FC' : '#4F46E5' }
+                                      : { backgroundColor: colors.isDark ? '#3730A3' : '#C7D2FE' }
+                                ]}
                             />
                         ))}
                     </View>
                     <Text style={[styles.challengeStatus, { color: colors.isDark ? '#C7D2FE' : '#4338CA' }]}>
-                        {Math.min(completadosHoy, 2)} / 2
+                        {ejerciciosHechos} de {currentWorkout.exercises.length}
                     </Text>
                 </View>
             </LinearGradient>
