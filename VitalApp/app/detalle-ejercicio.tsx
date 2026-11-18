@@ -26,6 +26,7 @@ import { API_URL } from '../constants/config';
 import { fetchSeguro } from '../utils/api';
 import { avisar } from '../utils/dialogos';
 import { textoIntensidad, colorIntensidad } from '../utils/textos';
+import { evaluarEjercicio, cargarCondiciones } from '../utils/condiciones';
 
 // Señales de alarma para detener el ejercicio (Capítulo 2, ejercicio terapéutico multicomponente)
 const SENALES_ALARMA = [
@@ -109,6 +110,11 @@ function obtenerPasos(nombre: string): string[] {
     return pasos;
 }
 
+// Estimación sencilla para ejercicio suave en adultos mayores: unas 3.5 kcal por minuto
+function caloriasPorSegundos(segundos: number): number {
+    return Math.round((segundos / 60) * 3.5);
+}
+
 export default function DetalleEjercicioScreen() {
     const params = useLocalSearchParams();
     const router = useRouter();
@@ -152,8 +158,16 @@ export default function DetalleEjercicioScreen() {
         url: decodeURIComponent(getParamString(params.url)),
         idVideo: parseInt(getParamString(params.id_video)) || null,
         contraindicaciones: getParamString(params.contraindicaciones),
-        fuente: getParamString(params.fuente)
+        fuente: getParamString(params.fuente),
+        categoria: getParamString(params.categoria)
     };
+
+    // Aviso por las enfermedades registradas en Mi salud (mismo texto que Inicio y Ejercicios)
+    const [condiciones, setCondiciones] = useState<string[]>([]);
+    useEffect(() => {
+        cargarCondiciones().then(setCondiciones).catch(() => setCondiciones([]));
+    }, []);
+    const avisoSalud = evaluarEjercicio(ejercicio.categoria, condiciones);
     const pasos = obtenerPasos(ejercicio.nombre);
 
     // RF08 / RNF04: las instrucciones también se escuchan (voz del sistema, sin archivos de audio)
@@ -186,7 +200,8 @@ export default function DetalleEjercicioScreen() {
                     id_video: ejercicio.idVideo,
                     nombre_ejercicio: ejercicio.nombre,
                     duracion_segundos: Math.round(segundosVistos),
-                    calorias_quemadas: completada ? Math.max(5, Math.floor(ejercicio.duracion / 60) * 4) : null,
+                    // Calorías según el tiempo real de la sesión, no la duración planeada del video
+                    calorias_quemadas: completada ? caloriasPorSegundos(segundosVistos) : null,
                     nivel_esfuerzo: esfuerzo,
                     completado: completada ? 1 : 0,
                     comentarios,
@@ -228,12 +243,10 @@ export default function DetalleEjercicioScreen() {
 
     const [celebrationVisible, setCelebrationVisible] = useState(false);
 
+    // Se llama después de guardar la sesión (botón de la celebración). El tiempo mínimo ya se
+    // revisó en handleCompletar; volver a revisarlo aquí dejaba al usuario atascado en el mismo
+    // ejercicio cuando usaba «Ya terminé», y la rutina volvía a empezar por el primero.
     const irAlSiguiente = () => {
-        if (segundosVistos < TIEMPO_MINIMO) {
-            console.log('Video terminado demasiado pronto, no se avanza automáticamente');
-            return;
-        }
-
         if (routineData && currentIndex < routineData.exercises.length - 1) {
             const nextIndex = currentIndex + 1;
             const nextExercise = routineData.exercises[nextIndex];
@@ -251,6 +264,7 @@ export default function DetalleEjercicioScreen() {
                     id_video: nextExercise.id_video || '',
                     fuente: nextExercise.fuente || '',
                     contraindicaciones: nextExercise.contraindicaciones || '',
+                    categoria: nextExercise.categoria || '',
                     routine: JSON.stringify(routineData),
                     index: nextIndex.toString()
                 }
@@ -269,55 +283,8 @@ export default function DetalleEjercicioScreen() {
         }
 
         setCompletado(true);
-        try {
-            // Actualizar estadísticas en AsyncStorage
-            const statsStr = await AsyncStorage.getItem('userStats');
-            const stats = statsStr ? JSON.parse(statsStr) : {
-                exercises: 0, calories: 0, minutes: 0,
-                weeklyGoal: 0, totalGoal: 3, challenge: '7X4'
-            };
-
-            const duracionMin = Math.floor(ejercicio.duracion / 60);
-            const caloriasEstimadas = duracionMin * 3; // ~3 cal/min for light exercise
-
-            stats.exercises += 1;
-            stats.calories += caloriasEstimadas;
-            stats.minutes += duracionMin;
-            stats.weeklyGoal = Math.min(stats.weeklyGoal + 1, stats.totalGoal);
-
-            await AsyncStorage.setItem('userStats', JSON.stringify(stats));
-
-            // Actualizar completados hoy
-            const hoyStr = await AsyncStorage.getItem('completadosHoy');
-            const hoy = parseInt(hoyStr || '0') + 1;
-            await AsyncStorage.setItem('completadosHoy', hoy.toString());
-
-            // Actualizar historial semanal
-            const historialStr = await AsyncStorage.getItem('weeklyHistory');
-            let historial = historialStr ? JSON.parse(historialStr) : [0, 0, 0, 0, 0, 0, 0];
-            const dayIndex = new Date().getDay();
-            historial[dayIndex] = hoy;
-            await AsyncStorage.setItem('weeklyHistory', JSON.stringify(historial));
-
-            // Actualizar racha
-            const lastDateStr = await AsyncStorage.getItem('lastExerciseDate');
-            const today = new Date().toDateString();
-            if (lastDateStr !== today) {
-                const yesterday = new Date();
-                yesterday.setDate(yesterday.getDate() - 1);
-                const rachaStr = await AsyncStorage.getItem('streakDays');
-                let racha = parseInt(rachaStr || '0');
-                if (lastDateStr === yesterday.toDateString()) {
-                    racha += 1;
-                } else {
-                    racha = 1;
-                }
-                await AsyncStorage.setItem('streakDays', racha.toString());
-                await AsyncStorage.setItem('lastExerciseDate', today);
-            }
-        } catch (error) {
-            console.log('Error guardando progreso:', error);
-        }
+        // El progreso (ejercicios, minutos, calorías, racha) se guarda solo en la BD al elegir el
+        // esfuerzo percibido; todas las pantallas lo leen de ahí para que sea el de esta cuenta.
 
         // Antes de celebrar se pide el esfuerzo percibido; al elegirlo se guarda la sesión
         setEsfuerzoVisible(true);
@@ -390,6 +357,27 @@ export default function DetalleEjercicioScreen() {
                 contentContainerStyle={[styles.scrollContent, { flexGrow: 1, paddingBottom: 130 }]}
             >
                 <View style={styles.webContainer}>
+                {/* Aviso por enfermedad: rojo si no es recomendado, amarillo si es solo precaución */}
+                {!!avisoSalud.aviso && (
+                    <View
+                        style={[styles.avisoSalud, avisoSalud.evitar ? styles.avisoSaludRojo : styles.avisoSaludAmarillo]}
+                        accessibilityRole="alert"
+                    >
+                        <Ionicons
+                            name={avisoSalud.evitar ? 'warning' : 'alert-circle'}
+                            size={30}
+                            color={avisoSalud.evitar ? '#991B1B' : '#854D0E'}
+                        />
+                        <View style={{ flex: 1 }}>
+                            <Text style={[styles.avisoSaludTitulo, { color: avisoSalud.evitar ? '#991B1B' : '#854D0E' }]}>
+                                {avisoSalud.evitar ? 'No recomendado para tu salud' : 'Precaución'}
+                            </Text>
+                            <Text style={[styles.avisoSaludTexto, { color: avisoSalud.evitar ? '#7F1D1D' : '#713F12' }]}>
+                                {avisoSalud.aviso}
+                            </Text>
+                        </View>
+                    </View>
+                )}
                 {/* Aviso de seguridad previo: el video no aparece hasta aceptarlo */}
                 {!seguridadAceptada ? (
                     <View style={[styles.contentSection, { backgroundColor: colors.card, borderColor: '#2563EB', borderWidth: 2, marginTop: 10 }]}>
@@ -581,7 +569,8 @@ export default function DetalleEjercicioScreen() {
                     ]}
                     onPress={() => {
                         if (completado) {
-                            if (router.canGoBack()) router.back();
+                            if (routineData) irAlSiguiente();
+                            else if (router.canGoBack()) router.back();
                             else router.replace('/(tabs)/ejercicios');
                         } else {
                             handleCompletar(false);
@@ -599,8 +588,8 @@ export default function DetalleEjercicioScreen() {
                             color="#FFFFFF" 
                         />
                         <Text style={styles.mainButtonText}>
-                            {completado 
-                                ? 'Ejercicio completado' 
+                            {completado
+                                ? (routineData && currentIndex < routineData.exercises.length - 1 ? 'Siguiente ejercicio' : 'Ejercicio completado')
                                 : segundosVistos < TIEMPO_MINIMO 
                                     ? `Tiempo restante (${TIEMPO_MINIMO - segundosVistos}s)`
                                     : (routineData ? 'Siguiente ejercicio' : 'Marcar como completado')
@@ -765,11 +754,11 @@ export default function DetalleEjercicioScreen() {
                             
                             <View style={styles.statsRow}>
                                 <View style={styles.miniStat}>
-                                    <Text style={styles.miniStatValue}>+{Math.floor(ejercicio.duracion / 60)}</Text>
+                                    <Text style={styles.miniStatValue}>+{Math.round(segundosVistos / 60)}</Text>
                                     <Text style={styles.miniStatLabel}>Min</Text>
                                 </View>
                                 <View style={styles.miniStat}>
-                                    <Text style={styles.miniStatValue}>+{Math.max(5, Math.floor(ejercicio.duracion / 60) * 4)}</Text>
+                                    <Text style={styles.miniStatValue}>+{caloriasPorSegundos(segundosVistos)}</Text>
                                     <Text style={styles.miniStatLabel}>Kcal</Text>
                                 </View>
                             </View>
@@ -797,6 +786,11 @@ export default function DetalleEjercicioScreen() {
 }
 
 const styles = StyleSheet.create({
+    avisoSalud: { flexDirection: 'row', alignItems: 'flex-start', gap: 12, borderWidth: 2, borderRadius: 16, padding: 16, marginHorizontal: 20, marginTop: 10, marginBottom: 6 },
+    avisoSaludRojo: { backgroundColor: '#FEE2E2', borderColor: '#DC2626' },
+    avisoSaludAmarillo: { backgroundColor: '#FEF9C3', borderColor: '#CA8A04' },
+    avisoSaludTitulo: { fontSize: 20, fontWeight: '800', marginBottom: 4 },
+    avisoSaludTexto: { fontSize: 18, fontWeight: '600', lineHeight: 26 },
     filaBotonesControl: { flexDirection: 'row', gap: 12 },
     botonPausa: {
         flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10,

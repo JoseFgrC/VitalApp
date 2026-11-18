@@ -1,0 +1,106 @@
+VITALAPP - REQUERIMIENTOS FUNCIONALES (RF01-RF15)
+Fuente: 04 Tesis l a lll.docx.pdf, cap. 3, iteraciones I1-I3 (pags. 63-66)
+Revision: 11/11/2026, por lectura del codigo (no se ejecuto la app)
+Resultado: 14 CUMPLE | 1 PARCIAL | 0 NO CUMPLE
+
+Usuarios (roles):
+  Adulto mayor = rol "usuario"   Cuidador = rol "cuidador"   Admin = rol "admin"
+Rutas:
+  Pantallas en VitalApp/app/
+  Rutas de la API en VitalBackend/server.js
+  Reglas en VitalBackend/utils/
+
+----------------------------------------------------------------------
+RF01  Registro de cuenta                                    [CUMPLE]
+  Usuario : Adulto mayor y Cuidador (el registro nunca crea un Admin)
+  Pantalla: login.tsx
+  API     : POST /api/register
+
+RF02  Aviso de privacidad y consentimiento                  [CUMPLE]
+  Usuario : Adulto mayor
+  Pantalla: consentimiento.tsx
+  API     : GET/POST /api/consentimiento
+  Regla   : RN01 (no se piden datos de salud sin consentimiento)
+
+RF03  Inicio y cierre de sesion                             [CUMPLE]
+  Usuario : Todos
+  Pantalla: login.tsx (entrar); perfil.tsx y home.tsx (salir)
+  API     : POST /api/login, /api/auth/google, /api/mfa/*
+
+RF04  Cuestionario de tamizaje                              [CUMPLE]
+  Usuario : Adulto mayor
+  Pantalla: valoracion.tsx
+  API     : POST /api/valoracion/tamizaje
+
+RF05  Registro de la Escala de Berg                         [CUMPLE]
+  Usuario : Adulto mayor (captura el puntaje que aplico un
+            profesional o un cuidador; se registra quien la aplico)
+  Pantalla: valoracion.tsx
+  API     : POST /api/valoracion/berg
+  Regla   : RN04 (puntaje de 0 a 56 y aplicador obligatorio)
+
+RF06  Asignacion automatica del nivel funcional             [CUMPLE]
+  Usuario : Sistema (resultado para el Adulto mayor)
+  Codigo  : utils/nivel.js; prueba en test/nivel.test.js
+  API     : GET /api/valoracion
+  Regla   : RN02 (rangos de Berg combinados con el tamizaje)
+
+RF07  Rutinas por nivel                                     [CUMPLE]
+  Usuario : Adulto mayor
+  Pantalla: ejercicios.tsx
+  API     : GET /api/rutinas, /api/exercises/user/:id
+  Regla   : RN03 (solo rutinas de su nivel o inferiores)
+
+RF08  Reproductor completo                                  [CUMPLE]
+  Usuario : Adulto mayor
+  Pantalla: detalle-ejercicio.tsx; components/VideoPlayer.tsx
+  Incluye : video (YouTube), voz (expo-speech), texto grande,
+            cronometro, calentamiento, enfriamiento, Pausa/Continuar
+
+RF09  Advertencias y boton de detener                       [CUMPLE]
+  Usuario : Adulto mayor
+  Pantalla: detalle-ejercicio.tsx (senales de alarma y boton "Detener")
+
+RF10  Registro de sesion con esfuerzo percibido             [CUMPLE]
+  Usuario : Adulto mayor
+  Pantalla: detalle-ejercicio.tsx (escala de Borg de 0 a 10 al terminar)
+  API     : POST /api/ejercicio-realizado
+
+RF11  Progreso                                              [CUMPLE]
+  Usuario : Adulto mayor
+  Pantalla: estadisticas.tsx
+  API     : GET /api/progreso, /api/ejercicio-realizado/:id_usuario
+
+RF12  Vinculacion del cuidador                              [CUMPLE]
+  Usuario : Adulto mayor (invita, autoriza, revoca) y Cuidador
+            (se vincula con un codigo y consulta el progreso)
+  Pantalla: perfil.tsx (adulto mayor); cuidador.tsx (cuidador)
+  API     : /api/cuidadores/* (adulto mayor); /api/cuidador/* (cuidador)
+  Codigo  : utils/cuidador.js; prueba en test/cuidador.test.js
+  Regla   : RN05 (el cuidador solo ve a quien lo autorizo)
+
+RF13  Recordatorios                                         [PARCIAL]
+  Usuario : Adulto mayor
+  Pantalla: recordatorios.tsx
+  API     : GET/PUT /api/recordatorios
+  Falta   : los recordatorios se guardan, pero nunca se avisa al
+            usuario (no hay expo-notifications). El interruptor de
+            "notificaciones" solo cambia la pantalla.
+
+RF14  Administracion de contenido con fuente documental     [CUMPLE]
+  Usuario : Admin
+  Pantalla: admin.tsx
+  API     : /api/admin/videos, /api/admin/rutinas,
+            /api/admin/config-ejercicios, /api/admin/usuarios
+  Script  : VitalBackend/scripts/crear-admin.js
+  Regla   : RN06 (sin fuente documental no se puede publicar)
+
+RF15  Derechos sobre los datos                              [CUMPLE]
+  Usuario : Adulto mayor y Cuidador (no aplica a Admin)
+  Pantalla: mis-datos.tsx; perfil.tsx (corregir datos)
+  API     : GET/DELETE /api/mis-datos, PUT /api/user/:id,
+            POST /api/consentimiento/revocar
+
+----------------------------------------------------------------------
+OJO EN EL PDF: la seccion 1.8.1 (pag. 23) lista solo 8 RF con otra
+numeracion. No coincide con estos 15 RF del capitulo 3.

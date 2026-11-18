@@ -12,11 +12,12 @@ import { useTheme } from '../hooks/useTheme';
 import { getVideoIdForExercise, DAILY_TIPS } from '../constants/exercises';
 import { API_URL } from '../constants/config';
 import { fetchSeguro } from '../utils/api';
+import { inicioDeSemana, metaDiasSemana, META_DIAS_POR_DEFECTO } from '../utils/metas';
 
 
 import { avisar, confirmar } from '../utils/dialogos';
 import { textoIntensidad, colorIntensidad } from '../utils/textos';
-import { evaluarEjercicio, cargarCondiciones } from '../utils/condiciones';
+import { evaluarEjercicio, cargarCondiciones, resumenCondiciones } from '../utils/condiciones';
 
 type Recomendado = {
   title: string; categoria: string; time: string; intensity: string; nivel: number;
@@ -68,15 +69,11 @@ export default function HomeScreen() {
   const router = useRouter();
   const { colors } = useTheme();
   
-  const [progressPercentage, setProgressPercentage] = useState(0);
-  const [weeklyStats, setWeeklyStats] = useState({
-    exercises: 0,
-    calories: 0,
-    minutes: 0,
-    weeklyGoal: 0,
-    totalGoal: 3,
-    challenge: '7X4'
-  });
+  // Días de esta semana (lunes a domingo) con al menos un ejercicio completado, según la BD
+  const [diasConEjercicio, setDiasConEjercicio] = useState<string[]>([]);
+  // Totales de esta semana, también desde la BD
+  const [semana, setSemana] = useState({ ejercicios: 0, calorias: 0, minutos: 0 });
+  const [metaDias, setMetaDias] = useState(META_DIAS_POR_DEFECTO);
   const [peso, setPeso] = useState(58);
   const [nombreUsuario, setNombreUsuario] = useState('Usuario');
   const [userId, setUserId] = useState<string | null>(null);   // id_usuario de la BD
@@ -106,27 +103,16 @@ export default function HomeScreen() {
 
   const cargarDatosUsuario = async () => {
     try {
-      const statsGuardadas    = await AsyncStorage.getItem('userStats');
       const nombreGuardado    = await AsyncStorage.getItem('userName');
       const userIdGuardado    = await AsyncStorage.getItem('userId');       // PK: id_usuario
-      const completadosHoyGuardados = await AsyncStorage.getItem('completadosHoy');
 
-      if (statsGuardadas) {
-        const stats = JSON.parse(statsGuardadas);
-        setWeeklyStats(stats);
-        const porcentaje = stats.totalGoal > 0
-          ? Math.round((stats.weeklyGoal / stats.totalGoal) * 100)
-          : 0;
-        setProgressPercentage(porcentaje);
-      }
       if (nombreGuardado)    setNombreUsuario(nombreGuardado);
       if (userIdGuardado)    setUserId(userIdGuardado);
-      if (completadosHoyGuardados) setCompletadosHoy(parseInt(completadosHoyGuardados));
 
       // Condiciones de salud: se leen de la BD (cifradas) para que sean las de esta cuenta
       const condicionesArray = await cargarCondiciones();
       setUserConditions(condicionesArray);
-      setConditionSummary(condicionesArray.length > 0 ? condicionesArray.join(', ') : 'Ninguna condición registrada');
+      setConditionSummary(condicionesArray.length > 0 ? resumenCondiciones(condicionesArray) : 'Ninguna condición registrada');
 
       // Peso: se obtiene del backend con el id_usuario real
       if (userIdGuardado) {
@@ -170,23 +156,41 @@ export default function HomeScreen() {
           setRutinasBD([]);
         }
 
-        // Ejercicios completados hoy, para marcar el avance de la rutina del día
+        // Progreso de hoy y de la semana: sale del historial de ESTA cuenta en la BD (RF10, RF11),
+        // no de datos guardados en el dispositivo, para que una cuenta nueva empiece en cero
         try {
           const resHist = await fetchSeguro(`${API_URL}/ejercicio-realizado/${userIdGuardado}`);
           const dataHist = await resHist.json();
+          const completados = (dataHist.historial || []).filter((h: any) => h.completado);
           const hoy = new Date().toDateString();
-          setHechosHoy((dataHist.historial || [])
-            .filter((h: any) => h.completado && new Date(h.fecha_hora_inicio).toDateString() === hoy)
-            .map((h: any) => (h.nombre_video || '').toLowerCase()));
+          const deHoy = completados.filter((h: any) => new Date(h.fecha_hora_inicio).toDateString() === hoy);
+          setHechosHoy(deHoy.map((h: any) => (h.nombre_video || '').toLowerCase()));
+          setCompletadosHoy(deHoy.length);
+
+          const lunes = inicioDeSemana(new Date());
+          const deSemana = completados.filter((h: any) => new Date(h.fecha_hora_inicio) >= lunes);
+          setDiasConEjercicio(Array.from(new Set<string>(
+            deSemana.map((h: any) => new Date(h.fecha_hora_inicio).toDateString()))));
+          setSemana({
+            ejercicios: deSemana.length,
+            calorias: Math.round(deSemana.reduce((s: number, h: any) => s + (Number(h.calorias_quemadas) || 0), 0)),
+            minutos: Math.round(deSemana.reduce((s: number, h: any) => s + (Number(h.duracion_segundos) || 0), 0) / 60),
+          });
         } catch (error) {
           console.log('No se pudo consultar el historial:', error);
+          setCompletadosHoy(0);
+          setDiasConEjercicio([]);
+          setSemana({ ejercicios: 0, calorias: 0, minutos: 0 });
         }
       }
 
       try {
         const resRec = await fetchSeguro(`${API_URL}/recordatorios`);
         const dataRec = await resRec.json();
-        if (dataRec.success) setProximoRecordatorio(calcularProximo(dataRec.recordatorios || []));
+        if (dataRec.success) {
+          setProximoRecordatorio(calcularProximo(dataRec.recordatorios || []));
+          setMetaDias(metaDiasSemana(dataRec.recordatorios));
+        }
       } catch (error) {
         setProximoRecordatorio(null);
       }
@@ -211,7 +215,7 @@ export default function HomeScreen() {
   };
 
   useEffect(() => {
-    setConditionSummary(userConditions.length > 0 ? userConditions.join(', ') : 'Ninguna condición registrada');
+    setConditionSummary(userConditions.length > 0 ? resumenCondiciones(userConditions) : 'Ninguna condición registrada');
   }, [userConditions]);
 
   const cambiarHydration = async (delta: number) => {
@@ -237,23 +241,6 @@ export default function HomeScreen() {
         console.log('No se pudo actualizar peso en BD:', e);
       }
     }
-  };
-
-  const reiniciarProgreso = async () => {
-    const statsIniciales = {
-      exercises: 0,
-      calories: 0,
-      minutes: 0,
-      weeklyGoal: 0,
-      totalGoal: 3,
-      challenge: '7X4'
-    };
-    setWeeklyStats(statsIniciales);
-    setProgressPercentage(0);
-    setCompletadosHoy(0);
-    await AsyncStorage.setItem('userStats', JSON.stringify(statsIniciales));
-    await AsyncStorage.setItem('completadosHoy', '0');
-    avisar('Progreso reiniciado', 'El contador ha vuelto a cero.');
   };
 
   // Rutinas del día - una diferente por cada día de la semana
@@ -376,18 +363,24 @@ export default function HomeScreen() {
   const rutinasDisponibles: any[] = rutinasDelAdmin.length > 0 ? rutinasDelAdmin : allRoutines;
   const levelRoutines = rutinasDisponibles.filter((routine) => routine.nivel <= nivelPermitido);
 
-  // Enfermedades: se quitan las rutinas cuya categoría no conviene (mismas reglas que el catálogo)
-  const safeRoutines = levelRoutines.filter(
-    (routine) => !evaluarEjercicio(routine.categoria, userConditions).evitar
-  );
+  // Enfermedades: una rutina es segura solo si su categoría Y cada uno de sus ejercicios pasan
+  // las reglas de Mi salud (los ejercicios sin categoría propia toman la de la rutina)
+  const rutinaEsSegura = (routine: any) =>
+    !evaluarEjercicio(routine.categoria, userConditions).evitar &&
+    routine.exercises.every((ex: any) =>
+      !evaluarEjercicio(ex.bd?.categoria ?? ex.categoria ?? routine.categoria, userConditions).evitar);
+  const safeRoutines = levelRoutines.filter(rutinaEsSegura);
 
-  const filteredRoutines = safeRoutines.length > 0 ? safeRoutines : levelRoutines;
-
-  const currentWorkout = filteredRoutines[dayOfWeek % filteredRoutines.length];
+  // Si ninguna rutina es segura no se muestra ninguna (nunca una no recomendada)
+  const hayRutinaSegura = safeRoutines.length > 0;
+  const currentWorkout = hayRutinaSegura
+    ? safeRoutines[dayOfWeek % safeRoutines.length]
+    : { title: 'RUTINA DEL DÍA', categoria: '', nivel: 0, time: '', exercises: [] as any[] };
+  const MENSAJE_SIN_RUTINA = 'Hoy no hay una rutina adecuada para tu salud; elige un ejercicio de Recomendados';
 
   // Avance de la rutina del día: ejercicios de la rutina completados hoy según el historial de la BD
   const ejerciciosHechos = currentWorkout.exercises.filter((ex: any) => hechosHoy.includes(ex.name.toLowerCase())).length;
-  const rutinaCompletada = ejerciciosHechos === currentWorkout.exercises.length;
+  const rutinaCompletada = hayRutinaSegura && ejerciciosHechos === currentWorkout.exercises.length;
 
   // Catálogo de recomendaciones fijas (complementa los ejercicios que carga el administrador)
   const allDiscoveryWorkouts = [
@@ -452,7 +445,7 @@ export default function HomeScreen() {
       // Lo que ya está en la rutina de hoy va al final, para que los recomendados aporten algo distinto
       const enRutinaHoy = currentWorkout.exercises.some((ex: any) => ex.name === w.title);
       const puntos = (motivo ? 3 : 0) + (w.bd ? 2 : 0) + (porEdad ? 1 : 0) + (w.nivel === nivelPermitido ? 0.5 : 0) - (enRutinaHoy ? 4 : 0) + desempate(w.title);
-      const razon = motivo || (porEdad ? 'Previene caídas' : w.bd ? 'Con respaldo profesional' : `Para tu nivel ${nivelPermitido}`);
+      const razon = motivo || (porEdad ? 'Previene caídas' : w.bd ? 'Con respaldo profesional' : `Para tu nivel ${NIVEL_EN_PALABRAS[nivelPermitido]?.nombre ?? nivelPermitido}`);
       return { ...w, evitar, razon, puntos };
     })
     .filter((w) => !w.evitar)
@@ -471,16 +464,23 @@ export default function HomeScreen() {
   // Calendario dinámico basado en la semana actual
   const today = new Date();
   const dayNames = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
-  const dailySchedule = Array.from({ length: 6 }, (_, i) => {
-    const d = new Date(today);
-    d.setDate(today.getDate() - today.getDay() + 1 + i); // Lun a Sáb
+  // Semana actual de lunes a domingo (también correcta en domingo)
+  const lunesSemana = inicioDeSemana(today);
+  const dailySchedule = Array.from({ length: 7 }, (_, i) => {
+    const d = new Date(lunesSemana);
+    d.setDate(lunesSemana.getDate() + i);
     return {
       day: dayNames[d.getDay()],
       date: d.getDate().toString(),
       active: d.toDateString() === today.toDateString(),
-      locked: d > today
+      hecho: diasConEjercicio.includes(d.toDateString()),
+      futuro: d > today
     };
   });
+  // Meta semanal: días de sus recordatorios o, si no tiene, 3 (OMS); misma regla que Mi progreso
+  const META_DIAS = metaDias;
+  const diasHechos = diasConEjercicio.length;
+  const progressPercentage = Math.round((Math.min(diasHechos, META_DIAS) / META_DIAS) * 100);
 
   const irAEjercicios = () => router.push('/ejercicios');
   const irAEstadisticas = () => router.push('/estadisticas');
@@ -496,12 +496,17 @@ export default function HomeScreen() {
         fuente: ex.bd.fuente_documental || '',
         contraindicaciones: ex.bd.contraindicaciones || '',
         duracion: String((Number(ex.bd.duracion_min) || 5) * 60),
+        categoria: (ex.bd.categoria || currentWorkout.categoria || '').toLowerCase(),
       }
-    : { name: ex.name, url: getVideoIdForExercise(ex.name), duracion: '300' };
+    : { name: ex.name, url: getVideoIdForExercise(ex.name), duracion: '300', categoria: currentWorkout.categoria };
+
+  // Empieza en el primer ejercicio de la rutina que aún no se hizo hoy (si sale a medias, continúa)
+  const indicePendiente = Math.max(0, currentWorkout.exercises.findIndex(
+    (ex: any) => !hechosHoy.includes(ex.name.toLowerCase())));
 
   const iniciarEntrenamiento = async () => {
     const ejercicios = currentWorkout.exercises.map(datosEjercicioRutina);
-    const primero = ejercicios[0];
+    const primero = ejercicios[indicePendiente];
     const rutinaParaReproductor = { title: currentWorkout.title, exercises: ejercicios };
 
     router.push({
@@ -516,8 +521,9 @@ export default function HomeScreen() {
         id_video: primero.id_video ?? '',
         fuente: primero.fuente ?? '',
         contraindicaciones: primero.contraindicaciones ?? '',
+        categoria: primero.categoria ?? '',
         routine: JSON.stringify(rutinaParaReproductor),
-        index: '0'
+        index: String(indicePendiente)
       }
     });
   };
@@ -536,7 +542,8 @@ export default function HomeScreen() {
         nombre: ejercicio.name,
         descripcion: `Ejercicio de la rutina ${currentWorkout.title}. Diseñado para cuidar tus articulaciones.`,
         duracion: '300',
-        dificultad: 'Fácil'
+        dificultad: 'Fácil',
+        categoria: currentWorkout.categoria
       }
     });
   };
@@ -556,7 +563,8 @@ export default function HomeScreen() {
           url: encodeURIComponent(e.link_video || ''),
           id_video: String(e.id_video),
           contraindicaciones: e.contraindicaciones || '',
-          fuente: e.fuente_documental || ''
+          fuente: e.fuente_documental || '',
+          categoria: (e.categoria || '').toLowerCase()
         }
       });
       return;
@@ -568,7 +576,8 @@ export default function HomeScreen() {
         nombre: workout.title,
         descripcion: workout.desc || 'Rutina recomendada especialmente para ti.',
         duracion: (parseInt(workout.time) * 60).toString(),
-        dificultad: workout.intensity === 'Media' ? 'Normal' : 'Fácil'
+        dificultad: workout.intensity === 'Media' ? 'Normal' : 'Fácil',
+        categoria: workout.categoria || ''
       }
     });
   };
@@ -637,7 +646,7 @@ export default function HomeScreen() {
               <View style={[styles.statIconCircle, { backgroundColor: colors.settingIconBg }]}>
                 <Ionicons name="fitness" size={28} color={colors.isDark ? '#60A5FA' : '#1E3A8A'} />
               </View>
-              <Text style={[styles.statNumber, { color: colors.text }]}>{weeklyStats.exercises}</Text>
+              <Text style={[styles.statNumber, { color: colors.text }]}>{semana.ejercicios}</Text>
               <Text style={[styles.statLabel, { color: colors.textSecondary }]} numberOfLines={2}>Ejercicios</Text>
             </TouchableOpacity>
             
@@ -645,7 +654,7 @@ export default function HomeScreen() {
               <View style={[styles.statIconCircle, { backgroundColor: colors.isDark ? '#78350F' : '#FEF3C7' }]}>
                 <FontAwesome5 name="fire" size={24} color={colors.isDark ? '#FBBF24' : '#D97706'} />
               </View>
-              <Text style={[styles.statNumber, { color: colors.text }]}>{weeklyStats.calories}</Text>
+              <Text style={[styles.statNumber, { color: colors.text }]}>{semana.calorias}</Text>
               <Text style={[styles.statLabel, { color: colors.textSecondary }]} numberOfLines={2}>Calorías</Text>
             </TouchableOpacity>
             
@@ -653,7 +662,7 @@ export default function HomeScreen() {
               <View style={[styles.statIconCircle, { backgroundColor: colors.isDark ? '#064E3B' : '#F0FDF4' }]}>
                 <Ionicons name="time" size={28} color={colors.isDark ? '#34D399' : '#059669'} />
               </View>
-              <Text style={[styles.statNumber, { color: colors.text }]}>{weeklyStats.minutes}</Text>
+              <Text style={[styles.statNumber, { color: colors.text }]}>{semana.minutos}</Text>
               <Text style={[styles.statLabel, { color: colors.textSecondary }]} numberOfLines={2}>Minutos</Text>
             </TouchableOpacity>
           </View>
@@ -697,7 +706,11 @@ export default function HomeScreen() {
                 </View>
               </View>
 
-              {rutinaCompletada ? (
+              {!hayRutinaSegura ? (
+                <Text style={[styles.planHoyTexto, { color: colors.text, marginTop: 10, marginBottom: 0 }]}>
+                  {MENSAJE_SIN_RUTINA}
+                </Text>
+              ) : rutinaCompletada ? (
                 <View style={styles.planHoyHecho} accessibilityRole="text">
                   <Ionicons name="checkmark-circle" size={34} color="#FFFFFF" />
                   <Text style={styles.planHoyBotonTexto}>Ya hiciste tu rutina de hoy</Text>
@@ -710,9 +723,10 @@ export default function HomeScreen() {
                   accessibilityHint={`${currentWorkout.title.toLowerCase()}, ${currentWorkout.exercises.length} ejercicios`}
                 >
                   <Ionicons name="play-circle" size={34} color="#FFFFFF" />
-                  <Text style={styles.planHoyBotonTexto}>Hacer mi rutina de hoy</Text>
+                  <Text style={styles.planHoyBotonTexto}>{ejerciciosHechos > 0 ? 'Continuar mi rutina' : 'Hacer mi rutina de hoy'}</Text>
                 </TouchableOpacity>
               )}
+              {hayRutinaSegura && (
               <Text style={[styles.planHoyTexto, { color: colors.textSecondary, marginTop: 10, marginBottom: 0 }]}>
                 {rutinaCompletada
                   ? '¡Muy bien! Mañana tendrás una rutina nueva.'
@@ -720,6 +734,7 @@ export default function HomeScreen() {
                     ? `Llevas ${ejerciciosHechos} de ${currentWorkout.exercises.length} ejercicios de hoy.`
                     : `${currentWorkout.exercises.length} ejercicios · ${currentWorkout.time.split(' - ')[0]}`}
               </Text>
+              )}
             </>
           )}
 
@@ -745,9 +760,9 @@ export default function HomeScreen() {
             <View style={styles.bannerTextContainer}>
               <Text style={[styles.bannerTitle, { color: colors.text }]}>Tu progreso diario</Text>
               <Text style={[styles.bannerSubtitle, { color: colors.textSecondary }]}>
-                {completadosHoy > 0 
-                  ? `Has completado ${completadosHoy} actividad(es) hoy. ¡Sigue así!` 
-                  : 'Una pequeña caminata hace una gran diferencia.'}
+                {completadosHoy > 0
+                  ? `Hoy completaste ${completadosHoy} ${completadosHoy === 1 ? 'ejercicio' : 'ejercicios'}${hayRutinaSegura ? `: ${ejerciciosHechos} de ${currentWorkout.exercises.length} de tu rutina` : ''}.`
+                  : 'Aún no haces ejercicio hoy. Un poco de movimiento hace una gran diferencia.'}
               </Text>
             </View>
             <Ionicons name="chevron-forward" size={28} color={colors.textSecondary} />
@@ -775,18 +790,22 @@ export default function HomeScreen() {
           <View style={styles.goalHeader}>
             <View style={styles.goalTitleContainer}>
               <Ionicons name="trophy" size={24} color="#D97706" />
-              <Text style={[styles.goalTitle, { color: colors.text }]}>Meta Semanal</Text>
+              <Text style={[styles.goalTitle, { color: colors.text }]}>Meta de la semana</Text>
             </View>
             <View style={[styles.goalBadge, colors.isDark && { backgroundColor: '#1E3A8A' }]}>
               <Text style={[styles.goalProgress, colors.isDark && { color: '#DBEAFE' }]}>
-                {weeklyStats.weeklyGoal} de {weeklyStats.totalGoal}
+                {Math.min(diasHechos, META_DIAS)} de {META_DIAS}
               </Text>
             </View>
           </View>
-          <Text style={[styles.challengeText, { color: colors.text }]}>Desafío {weeklyStats.challenge}</Text>
+          <Text style={[styles.challengeText, { color: colors.text }]}>
+            {diasHechos >= META_DIAS ? '¡Cumpliste tu meta de la semana!' : `Haz ejercicio ${META_DIAS} días esta semana`}
+          </Text>
           <View style={styles.progressContainer}>
             <View style={styles.progressHeader}>
-              <Text style={[styles.progressText, { color: colors.textSecondary }]}>Progreso Total</Text>
+              <Text style={[styles.progressText, { color: colors.textSecondary }]}>
+                {diasHechos === 1 ? '1 día con ejercicio' : `${diasHechos} días con ejercicio`}
+              </Text>
               <Text style={[styles.progressPercentage, colors.isDark && { color: '#6EE7B7' }]}>{progressPercentage}%</Text>
             </View>
             <View style={[styles.progressBar, colors.isDark && { backgroundColor: '#334155' }]}>
@@ -809,80 +828,89 @@ export default function HomeScreen() {
                         <Ionicons name="flash" size={24} color="#FFFFFF" />
                     </View>
                     <View style={styles.challengeTextGroup}>
-                        <Text style={[styles.challengeTitle, { color: colors.isDark ? '#E0E7FF' : '#1E1B4B' }]}>Desafío del Día</Text>
+                        <Text style={[styles.challengeTitle, { color: colors.isDark ? '#E0E7FF' : '#1E1B4B' }]}>Meta de hoy</Text>
                         <Text style={[styles.challengeDesc, { color: colors.isDark ? '#C7D2FE' : '#4338CA' }]}>
-                            {completadosHoy >= 2 ? '¡Desafío completado!' : 'Completa 2 rutinas hoy'}
+                            {!hayRutinaSegura
+                              ? MENSAJE_SIN_RUTINA
+                              : rutinaCompletada
+                              ? '¡Terminaste tu rutina de hoy!'
+                              : `Haz los ${currentWorkout.exercises.length} ejercicios de tu rutina (nivel ${NIVEL_EN_PALABRAS[nivelPermitido]?.nombre ?? nivelPermitido})`}
                         </Text>
                     </View>
-                    {completadosHoy >= 2 && (
+                    {rutinaCompletada && (
                         <View style={styles.completedBadge}>
                             <Ionicons name="checkmark-circle" size={24} color="#10B981" />
                         </View>
                     )}
                 </View>
                 
+                {hayRutinaSegura && (
                 <View style={styles.challengeProgressRow}>
                     <View style={styles.challengeDots}>
-                        {[1, 2].map((i) => (
-                            <View 
-                                key={i} 
+                        {currentWorkout.exercises.map((ex: any, i: number) => (
+                            <View
+                                key={i}
                                 style={[
-                                    styles.challengeDot, 
-                                    completadosHoy >= i ? { backgroundColor: '#4F46E5' } : { backgroundColor: colors.isDark ? '#4338CA' : '#C7D2FE' }
-                                ]} 
+                                    styles.challengeDot,
+                                    hechosHoy.includes(ex.name.toLowerCase())
+                                      ? { backgroundColor: colors.isDark ? '#A5B4FC' : '#4F46E5' }
+                                      : { backgroundColor: colors.isDark ? '#3730A3' : '#C7D2FE' }
+                                ]}
                             />
                         ))}
                     </View>
                     <Text style={[styles.challengeStatus, { color: colors.isDark ? '#C7D2FE' : '#4338CA' }]}>
-                        {Math.min(completadosHoy, 2)} / 2
+                        {ejerciciosHechos} de {currentWorkout.exercises.length}
                     </Text>
                 </View>
+                )}
             </LinearGradient>
         </View>
 
         {/* Plan del Día */}
         <View style={[styles.daySection, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}>
           <View style={styles.dayHeader}>
-            <Text style={[styles.dayNumber, { color: colors.text }]}>Día {today.getDate()}</Text>
-            <TouchableOpacity style={[styles.dayBadge, colors.isDark && { backgroundColor: '#334155' }]} onPress={reiniciarProgreso}>
-              <Ionicons name="refresh" size={18} color={colors.textSecondary} />
-              <Text style={[styles.dayBadgeText, { color: colors.text }]}>Reiniciar</Text>
-            </TouchableOpacity>
+            <Text style={[styles.dayNumber, { color: colors.text }]}>Tu semana</Text>
           </View>
           <View style={styles.daySelector}>
             {dailySchedule.map((day, index) => (
-              <View 
-                key={index} 
+              <View
+                key={index}
                 style={[
-                  styles.dayButton, 
-                  { backgroundColor: colors.isDark ? '#334155' : '#F8FAFC', borderColor: colors.isDark ? '#475569' : '#F1F5F9' },
+                  styles.dayButton,
+                  { backgroundColor: colors.isDark ? '#334155' : '#F8FAFC', borderColor: colors.isDark ? '#475569' : '#E2E8F0' },
+                  day.hecho && { backgroundColor: colors.isDark ? '#064E3B' : '#D1FAE5', borderColor: '#059669' },
                   day.active && styles.activeDayButton,
-                  day.locked && [styles.lockedDayButton, colors.isDark && { backgroundColor: '#1E293B' }]
+                  day.futuro && [styles.lockedDayButton, colors.isDark && { backgroundColor: '#1E293B' }]
                 ]}
+                accessibilityLabel={`${day.day} ${day.date}${day.hecho ? ', hiciste ejercicio' : ''}`}
               >
                 <Text style={[
-                  styles.dayText, 
+                  styles.dayText,
                   { color: colors.isDark ? '#E2E8F0' : colors.textSecondary },
                   day.active && styles.activeDayText,
-                  day.locked && styles.lockedDayText,
-                  day.locked && colors.isDark && { color: '#CBD5E1' }
                 ]}>
                   {day.day}
                 </Text>
                 <Text style={[
-                  styles.dateText, 
+                  styles.dateText,
                   { color: colors.text },
                   day.active && styles.activeDayText,
-                  day.locked && styles.lockedDayText,
-                  day.locked && colors.isDark && { color: '#CBD5E1' }
+                  day.futuro && { color: colors.textSecondary }
                 ]}>
-                  {day.locked ? (
-                    <Ionicons name="lock-closed" size={14} color={colors.textSecondary} />
-                  ) : day.date}
+                  {day.date}
                 </Text>
+                <Ionicons
+                  name={day.hecho ? 'checkmark-circle' : 'ellipse-outline'}
+                  size={18}
+                  color={day.hecho ? (day.active ? '#FFFFFF' : '#059669') : 'transparent'}
+                />
               </View>
             ))}
           </View>
+          <Text style={[styles.progressText, { color: colors.textSecondary, marginTop: 12 }]}>
+            Los días con ✓ son los días en que hiciste ejercicio.
+          </Text>
         </View>
 
         {nivelFuncional === 0 ? (
@@ -905,7 +933,7 @@ export default function HomeScreen() {
             </TouchableOpacity>
           </View>
           <Text style={[styles.sectionSubtitle, { color: colors.textSecondary }]}>
-            {`Según tu nivel ${nivelPermitido}${edadUsuario !== null ? `, tu edad (${edadUsuario})` : ''}${userConditions.length ? ` y: ${conditionSummary}` : ''}`}
+            {`Según tu nivel (${NIVEL_EN_PALABRAS[nivelPermitido]?.nombre ?? nivelPermitido})${edadUsuario !== null ? `, tu edad (${edadUsuario})` : ''}${userConditions.length ? ` y: ${conditionSummary}` : ''}`}
           </Text>
           
           <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.discoverScroll}>
@@ -923,7 +951,7 @@ export default function HomeScreen() {
                   <Text style={[styles.cardTitle, { color: colors.text }]} numberOfLines={2}>{workout.title}</Text>
                   <View style={styles.razonRow}>
                     <Ionicons name="checkmark-circle" size={16} color="#059669" />
-                    <Text style={[styles.razonText, colors.isDark && { color: '#6EE7B7' }]} numberOfLines={1}>{workout.razon}</Text>
+                    <Text style={[styles.razonText, colors.isDark && { color: '#6EE7B7' }]} numberOfLines={2}>{workout.razon}</Text>
                   </View>
                   <View style={styles.cardInfoRow}>
                     <View style={styles.cardTimeBadge}>
@@ -993,7 +1021,7 @@ export default function HomeScreen() {
                 <Ionicons name="checkmark-circle" size={16} color="#FFFFFF" />
                 <Text style={[styles.workoutInfo, { color: '#FFFFFF' }]}>Completada hoy</Text>
               </View>
-            ) : (
+            ) : !hayRutinaSegura ? null : (
               <View style={[styles.workoutBadge, colors.isDark && { backgroundColor: '#1E3A8A' }]}>
                 <Ionicons name="time" size={16} color="#60A5FA" />
                 <Text style={[styles.workoutInfo, colors.isDark && { color: '#DBEAFE' }]}>{currentWorkout.time}</Text>
@@ -1027,6 +1055,9 @@ export default function HomeScreen() {
             </TouchableOpacity>
           ))}
           
+          {!hayRutinaSegura ? (
+            <Text style={[styles.rutinaAvance, { color: colors.text }]}>{MENSAJE_SIN_RUTINA}</Text>
+          ) : (
           <TouchableOpacity 
             style={styles.workoutStartButton} 
             activeOpacity={0.9}
@@ -1040,6 +1071,7 @@ export default function HomeScreen() {
               <Text style={styles.workoutStartText}>{rutinaCompletada ? 'Repetir la rutina' : 'Iniciar Rutina Completa'}</Text>
             </LinearGradient>
           </TouchableOpacity>
+          )}
           {rutinaCompletada ? (
             <View style={styles.rutinaListaBox}>
               <Text style={styles.rutinaListaTitulo}>🎉 ¡Cumpliste la rutina de hoy!</Text>
@@ -1301,7 +1333,7 @@ const styles = StyleSheet.create({
   dayBadge: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#F1F5F9', paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20, gap: 6 },
   dayBadgeText: { fontSize: 18, color: '#475569', fontWeight: '700' },
   daySelector: { flexDirection: 'row', justifyContent: 'space-between' },
-  dayButton: { alignItems: 'center', paddingVertical: 12, borderRadius: 16, backgroundColor: '#F8FAFC', width: '15%', borderWidth: 1, borderColor: '#F1F5F9' },
+  dayButton: { alignItems: 'center', paddingVertical: 10, borderRadius: 14, backgroundColor: '#F8FAFC', width: '13.5%', borderWidth: 1, borderColor: '#F1F5F9' },
   activeDayButton: { backgroundColor: '#2563EB', borderColor: '#2563EB' },
   lockedDayButton: { backgroundColor: '#F1F5F9' },
   dayText: { fontSize: 18, color: '#64748B', fontWeight: '700', marginBottom: 6 },
@@ -1347,7 +1379,8 @@ const styles = StyleSheet.create({
   rutinaListaBox: { marginTop: 14, padding: 16, borderRadius: 16, backgroundColor: '#ECFDF5', borderWidth: 1, borderColor: '#6EE7B7' },
   rutinaListaTitulo: { fontSize: 18, fontWeight: '800', color: '#065F46', marginBottom: 4 },
   rutinaListaTexto: { fontSize: 18, color: '#065F46', lineHeight: 24 },
-  cardInfoRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  // En columna: la duración y la intensidad no caben juntas a 18 px en una tarjeta de 220 px
+  cardInfoRow: { flexDirection: 'column', alignItems: 'flex-start', gap: 8 },
   cardTimeBadge: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   cardTime: { fontSize: 18, color: '#64748B', fontWeight: '600' },
   intensityBadge: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 12 },

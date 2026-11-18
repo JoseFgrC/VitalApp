@@ -19,7 +19,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { API_URL } from '../constants/config';
 import { fetchSeguro } from '../utils/api';
 import { textoIntensidad, colorIntensidad, textoDuracion } from '../utils/textos';
-import { evaluarEjercicio, cargarCondiciones as cargarCondicionesUsuario } from '../utils/condiciones';
+import { evaluarEjercicio, cargarCondiciones as cargarCondicionesUsuario, resumenCondiciones } from '../utils/condiciones';
 import MenuInferior from '../components/MenuInferior';
 import { useTheme } from '../hooks/useTheme';
 import { getVideoIdForExercise } from '../constants/exercises';
@@ -135,7 +135,8 @@ export default function EjerciciosScreen() {
                 url: encodeURIComponent(ejercicio.url || ''),
                 id_video: ejercicio.id.toString(),
                 contraindicaciones: ejercicio.contraindicaciones || '',
-                fuente: ejercicio.fuente || ''
+                fuente: ejercicio.fuente || '',
+                categoria: ejercicio.categoria || ''
             }
         });
     };
@@ -170,11 +171,11 @@ export default function EjerciciosScreen() {
     };
 
     const conditionSummary = userConditions.length > 0
-        ? userConditions.join(', ')
+        ? resumenCondiciones(userConditions)
         : 'Ninguna condición registrada';
 
     // Mismas reglas que Inicio (utils/condiciones.ts)
-    const getExerciseAdvice = (ejercicio: Ejercicio) => evaluarEjercicio(ejercicio.categoria, userConditions).aviso;
+    const getExerciseAdvice = (ejercicio: Ejercicio) => evaluarEjercicio(ejercicio.categoria, userConditions);
 
     // Colores con contraste ≥ 4.5:1 (utils/textos.ts)
     const getDificultadColor = (dificultad: string) => {
@@ -276,7 +277,7 @@ export default function EjerciciosScreen() {
                         onPress={() => setShowOnlyRecommended((prev) => !prev)}
                     >
                         <Ionicons
-                            name={showOnlyRecommended ? 'eye-off' : 'eye'}
+                            name={showOnlyRecommended ? 'eye' : 'eye-off'}
                             size={18}
                             color={showOnlyRecommended ? '#FFFFFF' : '#2563EB'}
                         />
@@ -284,7 +285,8 @@ export default function EjerciciosScreen() {
                             styles.recommendToggleText,
                             showOnlyRecommended && { color: '#FFFFFF' }
                         ]}>
-                            {showOnlyRecommended ? 'Solo recomendados' : 'Mostrar no recomendados'}
+                            {/* El texto dice lo que hará el botón al tocarlo */}
+                            {showOnlyRecommended ? 'Mostrar todos' : 'Ocultar no recomendados'}
                         </Text>
                     </TouchableOpacity>
                 </View>
@@ -373,12 +375,22 @@ export default function EjerciciosScreen() {
                                         </View>
                                     </View>
                                     
-                                    {getExerciseAdvice(ejercicio) ? (
-                                        <View style={[styles.warningBanner, { backgroundColor: '#FEE2E2', borderColor: '#FECACA', marginTop: 12, marginHorizontal: 0 }]}>
-                                            <Ionicons name="warning-outline" size={24} color="#991B1B" />
-                                            <Text style={styles.warningText}>{getExerciseAdvice(ejercicio)}</Text>
-                                        </View>
-                                    ) : null}
+                                    {/* Rojo: no recomendado. Amarillo: solo precaución (p. ej. diabetes) */}
+                                    {(() => {
+                                        const { aviso, evitar } = getExerciseAdvice(ejercicio);
+                                        if (!aviso) return null;
+                                        return evitar ? (
+                                            <View style={[styles.warningBanner, { backgroundColor: '#FEE2E2', borderColor: '#FECACA', marginTop: 12, marginHorizontal: 0 }]}>
+                                                <Ionicons name="warning-outline" size={24} color="#991B1B" />
+                                                <Text style={styles.warningText}>{aviso}</Text>
+                                            </View>
+                                        ) : (
+                                            <View style={[styles.warningBanner, { backgroundColor: '#FEF9C3', borderColor: '#CA8A04', marginTop: 12, marginHorizontal: 0 }]}>
+                                                <Ionicons name="alert-circle-outline" size={24} color="#854D0E" />
+                                                <Text style={[styles.warningText, { color: '#713F12' }]}>{aviso}</Text>
+                                            </View>
+                                        );
+                                    })()}
 
                                     <View style={[styles.divider, { backgroundColor: colors.cardBorder }]} />
 
