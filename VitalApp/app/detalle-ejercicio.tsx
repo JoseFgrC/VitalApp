@@ -779,7 +779,7 @@ export default function DetalleEjercicioScreen() {
 }
 
 const styles = StyleSheet.create({
-    avisoSalud: { flexDirection: 'row', alignItems: 'flex-start', gap: 12, borderWidth: 2, borderRadius: 16, padding: 16, marginTop: 10, marginBottom: 6 },
+    avisoSalud: { flexDirection: 'row', alignItems: 'flex-start', gap: 12, borderWidth: 2, borderRadius: 16, padding: 16, marginHorizontal: 20, marginTop: 10, marginBottom: 6 },
     avisoSaludRojo: { backgroundColor: '#FEE2E2', borderColor: '#DC2626' },
     avisoSaludAmarillo: { backgroundColor: '#FEF9C3', borderColor: '#CA8A04' },
     avisoSaludTitulo: { fontSize: 20, fontWeight: '800', marginBottom: 4 },
