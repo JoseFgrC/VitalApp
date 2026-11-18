@@ -274,7 +274,7 @@ export default function EjerciciosScreen() {
                         onPress={() => setShowOnlyRecommended((prev) => !prev)}
                     >
                         <Ionicons
-                            name={showOnlyRecommended ? 'eye-off' : 'eye'}
+                            name={showOnlyRecommended ? 'eye' : 'eye-off'}
                             size={18}
                             color={showOnlyRecommended ? '#FFFFFF' : '#2563EB'}
                         />
@@ -282,7 +282,8 @@ export default function EjerciciosScreen() {
                             styles.recommendToggleText,
                             showOnlyRecommended && { color: '#FFFFFF' }
                         ]}>
-                            {showOnlyRecommended ? 'Solo recomendados' : 'Mostrar no recomendados'}
+                            {/* El texto dice lo que hará el botón al tocarlo */}
+                            {showOnlyRecommended ? 'Mostrar todos' : 'Ocultar no recomendados'}
                         </Text>
                     </TouchableOpacity>
                 </View>
