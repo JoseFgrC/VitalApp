@@ -17,7 +17,7 @@ import { inicioDeSemana, metaDiasSemana, META_DIAS_POR_DEFECTO } from '../utils/
 
 import { avisar, confirmar } from '../utils/dialogos';
 import { textoIntensidad, colorIntensidad } from '../utils/textos';
-import { evaluarEjercicio, cargarCondiciones } from '../utils/condiciones';
+import { evaluarEjercicio, cargarCondiciones, resumenCondiciones } from '../utils/condiciones';
 
 type Recomendado = {
   title: string; categoria: string; time: string; intensity: string; nivel: number;
@@ -112,7 +112,7 @@ export default function HomeScreen() {
       // Condiciones de salud: se leen de la BD (cifradas) para que sean las de esta cuenta
       const condicionesArray = await cargarCondiciones();
       setUserConditions(condicionesArray);
-      setConditionSummary(condicionesArray.length > 0 ? condicionesArray.join(', ') : 'Ninguna condición registrada');
+      setConditionSummary(condicionesArray.length > 0 ? resumenCondiciones(condicionesArray) : 'Ninguna condición registrada');
 
       // Peso: se obtiene del backend con el id_usuario real
       if (userIdGuardado) {
@@ -215,7 +215,7 @@ export default function HomeScreen() {
   };
 
   useEffect(() => {
-    setConditionSummary(userConditions.length > 0 ? userConditions.join(', ') : 'Ninguna condición registrada');
+    setConditionSummary(userConditions.length > 0 ? resumenCondiciones(userConditions) : 'Ninguna condición registrada');
   }, [userConditions]);
 
   const cambiarHydration = async (delta: number) => {
@@ -445,7 +445,7 @@ export default function HomeScreen() {
       // Lo que ya está en la rutina de hoy va al final, para que los recomendados aporten algo distinto
       const enRutinaHoy = currentWorkout.exercises.some((ex: any) => ex.name === w.title);
       const puntos = (motivo ? 3 : 0) + (w.bd ? 2 : 0) + (porEdad ? 1 : 0) + (w.nivel === nivelPermitido ? 0.5 : 0) - (enRutinaHoy ? 4 : 0) + desempate(w.title);
-      const razon = motivo || (porEdad ? 'Previene caídas' : w.bd ? 'Con respaldo profesional' : `Para tu nivel ${nivelPermitido}`);
+      const razon = motivo || (porEdad ? 'Previene caídas' : w.bd ? 'Con respaldo profesional' : `Para tu nivel ${NIVEL_EN_PALABRAS[nivelPermitido]?.nombre ?? nivelPermitido}`);
       return { ...w, evitar, razon, puntos };
     })
     .filter((w) => !w.evitar)

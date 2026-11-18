@@ -19,7 +19,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { API_URL } from '../constants/config';
 import { fetchSeguro } from '../utils/api';
 import { textoIntensidad, colorIntensidad, textoDuracion } from '../utils/textos';
-import { evaluarEjercicio, cargarCondiciones as cargarCondicionesUsuario } from '../utils/condiciones';
+import { evaluarEjercicio, cargarCondiciones as cargarCondicionesUsuario, resumenCondiciones } from '../utils/condiciones';
 import MenuInferior from '../components/MenuInferior';
 import { useTheme } from '../hooks/useTheme';
 import { getVideoIdForExercise } from '../constants/exercises';
@@ -171,7 +171,7 @@ export default function EjerciciosScreen() {
     };
 
     const conditionSummary = userConditions.length > 0
-        ? userConditions.join(', ')
+        ? resumenCondiciones(userConditions)
         : 'Ninguna condición registrada';
 
     // Mismas reglas que Inicio (utils/condiciones.ts)
