@@ -135,7 +135,8 @@ export default function EjerciciosScreen() {
                 url: encodeURIComponent(ejercicio.url || ''),
                 id_video: ejercicio.id.toString(),
                 contraindicaciones: ejercicio.contraindicaciones || '',
-                fuente: ejercicio.fuente || ''
+                fuente: ejercicio.fuente || '',
+                categoria: ejercicio.categoria || ''
             }
         });
     };

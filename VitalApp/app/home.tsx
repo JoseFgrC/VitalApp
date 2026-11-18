@@ -496,8 +496,9 @@ export default function HomeScreen() {
         fuente: ex.bd.fuente_documental || '',
         contraindicaciones: ex.bd.contraindicaciones || '',
         duracion: String((Number(ex.bd.duracion_min) || 5) * 60),
+        categoria: (ex.bd.categoria || currentWorkout.categoria || '').toLowerCase(),
       }
-    : { name: ex.name, url: getVideoIdForExercise(ex.name), duracion: '300' };
+    : { name: ex.name, url: getVideoIdForExercise(ex.name), duracion: '300', categoria: currentWorkout.categoria };
 
   // Empieza en el primer ejercicio de la rutina que aún no se hizo hoy (si sale a medias, continúa)
   const indicePendiente = Math.max(0, currentWorkout.exercises.findIndex(
@@ -520,6 +521,7 @@ export default function HomeScreen() {
         id_video: primero.id_video ?? '',
         fuente: primero.fuente ?? '',
         contraindicaciones: primero.contraindicaciones ?? '',
+        categoria: primero.categoria ?? '',
         routine: JSON.stringify(rutinaParaReproductor),
         index: String(indicePendiente)
       }
@@ -540,7 +542,8 @@ export default function HomeScreen() {
         nombre: ejercicio.name,
         descripcion: `Ejercicio de la rutina ${currentWorkout.title}. Diseñado para cuidar tus articulaciones.`,
         duracion: '300',
-        dificultad: 'Fácil'
+        dificultad: 'Fácil',
+        categoria: currentWorkout.categoria
       }
     });
   };
@@ -560,7 +563,8 @@ export default function HomeScreen() {
           url: encodeURIComponent(e.link_video || ''),
           id_video: String(e.id_video),
           contraindicaciones: e.contraindicaciones || '',
-          fuente: e.fuente_documental || ''
+          fuente: e.fuente_documental || '',
+          categoria: (e.categoria || '').toLowerCase()
         }
       });
       return;
@@ -572,7 +576,8 @@ export default function HomeScreen() {
         nombre: workout.title,
         descripcion: workout.desc || 'Rutina recomendada especialmente para ti.',
         duracion: (parseInt(workout.time) * 60).toString(),
-        dificultad: workout.intensity === 'Media' ? 'Normal' : 'Fácil'
+        dificultad: workout.intensity === 'Media' ? 'Normal' : 'Fácil',
+        categoria: workout.categoria || ''
       }
     });
   };

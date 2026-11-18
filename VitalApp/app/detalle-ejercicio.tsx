@@ -26,6 +26,7 @@ import { API_URL } from '../constants/config';
 import { fetchSeguro } from '../utils/api';
 import { avisar } from '../utils/dialogos';
 import { textoIntensidad, colorIntensidad } from '../utils/textos';
+import { evaluarEjercicio, cargarCondiciones } from '../utils/condiciones';
 
 // Señales de alarma para detener el ejercicio (Capítulo 2, ejercicio terapéutico multicomponente)
 const SENALES_ALARMA = [
@@ -157,8 +158,16 @@ export default function DetalleEjercicioScreen() {
         url: decodeURIComponent(getParamString(params.url)),
         idVideo: parseInt(getParamString(params.id_video)) || null,
         contraindicaciones: getParamString(params.contraindicaciones),
-        fuente: getParamString(params.fuente)
+        fuente: getParamString(params.fuente),
+        categoria: getParamString(params.categoria)
     };
+
+    // Aviso por las enfermedades registradas en Mi salud (mismo texto que Inicio y Ejercicios)
+    const [condiciones, setCondiciones] = useState<string[]>([]);
+    useEffect(() => {
+        cargarCondiciones().then(setCondiciones).catch(() => setCondiciones([]));
+    }, []);
+    const avisoSalud = evaluarEjercicio(ejercicio.categoria, condiciones);
     const pasos = obtenerPasos(ejercicio.nombre);
 
     // RF08 / RNF04: las instrucciones también se escuchan (voz del sistema, sin archivos de audio)
@@ -255,6 +264,7 @@ export default function DetalleEjercicioScreen() {
                     id_video: nextExercise.id_video || '',
                     fuente: nextExercise.fuente || '',
                     contraindicaciones: nextExercise.contraindicaciones || '',
+                    categoria: nextExercise.categoria || '',
                     routine: JSON.stringify(routineData),
                     index: nextIndex.toString()
                 }
@@ -340,6 +350,27 @@ export default function DetalleEjercicioScreen() {
 
             <ScrollView style={styles.container} showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
                 <View style={styles.webContainer}>
+                {/* Aviso por enfermedad: rojo si no es recomendado, amarillo si es solo precaución */}
+                {!!avisoSalud.aviso && (
+                    <View
+                        style={[styles.avisoSalud, avisoSalud.evitar ? styles.avisoSaludRojo : styles.avisoSaludAmarillo]}
+                        accessibilityRole="alert"
+                    >
+                        <Ionicons
+                            name={avisoSalud.evitar ? 'warning' : 'alert-circle'}
+                            size={30}
+                            color={avisoSalud.evitar ? '#991B1B' : '#854D0E'}
+                        />
+                        <View style={{ flex: 1 }}>
+                            <Text style={[styles.avisoSaludTitulo, { color: avisoSalud.evitar ? '#991B1B' : '#854D0E' }]}>
+                                {avisoSalud.evitar ? 'No recomendado para tu salud' : 'Precaución'}
+                            </Text>
+                            <Text style={[styles.avisoSaludTexto, { color: avisoSalud.evitar ? '#7F1D1D' : '#713F12' }]}>
+                                {avisoSalud.aviso}
+                            </Text>
+                        </View>
+                    </View>
+                )}
                 {/* Aviso de seguridad previo: el video no aparece hasta aceptarlo */}
                 {!seguridadAceptada ? (
                     <View style={[styles.contentSection, { backgroundColor: colors.card, borderColor: '#2563EB', borderWidth: 2, marginTop: 10 }]}>
@@ -748,6 +779,11 @@ export default function DetalleEjercicioScreen() {
 }
 
 const styles = StyleSheet.create({
+    avisoSalud: { flexDirection: 'row', alignItems: 'flex-start', gap: 12, borderWidth: 2, borderRadius: 16, padding: 16, marginTop: 10, marginBottom: 6 },
+    avisoSaludRojo: { backgroundColor: '#FEE2E2', borderColor: '#DC2626' },
+    avisoSaludAmarillo: { backgroundColor: '#FEF9C3', borderColor: '#CA8A04' },
+    avisoSaludTitulo: { fontSize: 20, fontWeight: '800', marginBottom: 4 },
+    avisoSaludTexto: { fontSize: 18, fontWeight: '600', lineHeight: 26 },
     filaBotonesControl: { flexDirection: 'row', gap: 12 },
     botonPausa: {
         flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10,
