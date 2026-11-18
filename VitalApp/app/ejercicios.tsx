@@ -175,7 +175,7 @@ export default function EjerciciosScreen() {
         : 'Ninguna condición registrada';
 
     // Mismas reglas que Inicio (utils/condiciones.ts)
-    const getExerciseAdvice = (ejercicio: Ejercicio) => evaluarEjercicio(ejercicio.categoria, userConditions).aviso;
+    const getExerciseAdvice = (ejercicio: Ejercicio) => evaluarEjercicio(ejercicio.categoria, userConditions);
 
     // Colores con contraste ≥ 4.5:1 (utils/textos.ts)
     const getDificultadColor = (dificultad: string) => {
@@ -372,12 +372,22 @@ export default function EjerciciosScreen() {
                                         </View>
                                     </View>
                                     
-                                    {getExerciseAdvice(ejercicio) ? (
-                                        <View style={[styles.warningBanner, { backgroundColor: '#FEE2E2', borderColor: '#FECACA', marginTop: 12, marginHorizontal: 0 }]}>
-                                            <Ionicons name="warning-outline" size={24} color="#991B1B" />
-                                            <Text style={styles.warningText}>{getExerciseAdvice(ejercicio)}</Text>
-                                        </View>
-                                    ) : null}
+                                    {/* Rojo: no recomendado. Amarillo: solo precaución (p. ej. diabetes) */}
+                                    {(() => {
+                                        const { aviso, evitar } = getExerciseAdvice(ejercicio);
+                                        if (!aviso) return null;
+                                        return evitar ? (
+                                            <View style={[styles.warningBanner, { backgroundColor: '#FEE2E2', borderColor: '#FECACA', marginTop: 12, marginHorizontal: 0 }]}>
+                                                <Ionicons name="warning-outline" size={24} color="#991B1B" />
+                                                <Text style={styles.warningText}>{aviso}</Text>
+                                            </View>
+                                        ) : (
+                                            <View style={[styles.warningBanner, { backgroundColor: '#FEF9C3', borderColor: '#CA8A04', marginTop: 12, marginHorizontal: 0 }]}>
+                                                <Ionicons name="alert-circle-outline" size={24} color="#854D0E" />
+                                                <Text style={[styles.warningText, { color: '#713F12' }]}>{aviso}</Text>
+                                            </View>
+                                        );
+                                    })()}
 
                                     <View style={[styles.divider, { backgroundColor: colors.cardBorder }]} />
 
