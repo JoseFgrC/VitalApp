@@ -61,6 +61,18 @@ const REGLAS: Regla[] = [
 
 const normalizar = (t: string) => (t || '').toString().trim().toLowerCase();
 
+// Nombres sencillos que ve la persona (los mismos de la pantalla «Mi salud»)
+const NOMBRE_SENCILLO: Record<string, string> = {
+    'hipertensión': 'Presión alta',
+    'problemas de corazón': 'Problemas del corazón',
+    'diabetes': 'Azúcar alta en la sangre',
+    'artritis': 'Dolor e inflamación de articulaciones',
+    'osteoporosis': 'Huesos frágiles',
+    'cáncer': 'Cáncer',
+};
+export const nombreSencillo = (condicion: string) => NOMBRE_SENCILLO[normalizar(condicion)] || condicion;
+export const resumenCondiciones = (condiciones: string[]) => condiciones.map(nombreSencillo).join(', ');
+
 function reglasDe(condiciones: string[]): Regla[] {
     const lista = condiciones.map(normalizar);
     return REGLAS.filter(r => r.claves.some(c => lista.some(cond => cond.includes(c))));

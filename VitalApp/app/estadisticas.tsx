@@ -19,6 +19,7 @@ import MenuInferior from '../components/MenuInferior';
 import { useTheme } from '../hooks/useTheme';
 import { API_URL } from '../constants/config';
 import { fetchSeguro } from '../utils/api';
+import { metaDiasSemana, META_DIAS_POR_DEFECTO } from '../utils/metas';
 import Svg, { Circle, Text as SvgText } from 'react-native-svg';
 
 const { width } = Dimensions.get('window');
@@ -73,8 +74,8 @@ export default function EstadisticasScreen() {
         progresoSemanal: [0, 0, 0, 0, 0, 0, 0],
         esfuerzoPromedio: null as number | null,
         detenidas: 0,
-        // Meta de días por semana: los días de sus recordatorios activos, o 5 si no tiene
-        metaDias: 5,
+        // Meta de días por semana: los días de sus recordatorios activos, o 3 si no tiene (utils/metas)
+        metaDias: META_DIAS_POR_DEFECTO,
         logros: [
             { id: 1, nombre: 'Primer paso', icono: '🌟', desbloqueado: false, condicion: 1, tipo: 'ejercicios' },
             { id: 2, nombre: '5 días seguidos', icono: '🔥', desbloqueado: false, condicion: 5, tipo: 'racha' },
@@ -95,43 +96,16 @@ export default function EstadisticasScreen() {
         try {
             setCargando(true);
 
-            // Leer progreso real desde AsyncStorage
-            const statsStr = await AsyncStorage.getItem('userStats');
-            const puntosStr = await AsyncStorage.getItem('userPoints');
-            const completadosHoyStr = await AsyncStorage.getItem('completadosHoy');
-            const historialStr = await AsyncStorage.getItem('weeklyHistory');
-            const rachaStr = await AsyncStorage.getItem('streakDays');
-
-            const stats = statsStr ? JSON.parse(statsStr) : null;
-            const puntos = parseInt(puntosStr || '0');
-            const completadosHoy = parseInt(completadosHoyStr || '0');
-
-            // Historial semanal: guardamos un array de 7 días
+            // RF11: todo el progreso sale de las sesiones de ESTA cuenta en la BD. Ya no se usan
+            // datos guardados en el teléfono: eran del dispositivo, no de la cuenta, y no se reiniciaban.
             let progresoSemanal = [0, 0, 0, 0, 0, 0, 0];
-            if (historialStr) {
-                try {
-                    const historial = JSON.parse(historialStr);
-                    progresoSemanal = historial;
-                } catch (e) {
-                    console.log('Error parsing weekly history');
-                }
-            }
-
-            // Si hay stats del home, usarlos para actualizar el día actual en el historial
-            if (stats && completadosHoy > 0) {
-                const dayIndex = new Date().getDay(); // 0=Dom, 1=Lun...
-                progresoSemanal[dayIndex] = completadosHoy;
-                await AsyncStorage.setItem('weeklyHistory', JSON.stringify(progresoSemanal));
-            }
-
-            let totalEjercicios = stats ? stats.exercises : 0;
-            let racha = parseInt(rachaStr || '0');
-            let calorias = stats ? stats.calories : 0;
-            let minutos = stats ? stats.minutes : 0;
+            let totalEjercicios = 0;
+            let racha = 0;
+            let calorias = 0;
+            let minutos = 0;
             let esfuerzoPromedio: number | null = null;
             let detenidas = 0;
 
-            // RF11: el progreso real viene de las sesiones guardadas en la BD; lo local queda como respaldo sin conexión
             try {
                 const res = await fetchSeguro(`${API_URL}/progreso`);
                 const data = await res.json();
@@ -145,26 +119,19 @@ export default function EstadisticasScreen() {
                     progresoSemanal = data.semana;
                 }
             } catch (error) {
-                console.log('Sin conexión, mostrando progreso guardado en el teléfono:', error);
+                console.log('Sin conexión: no se pudo leer el progreso de la BD:', error);
             }
 
-            // Meta de días: los días distintos de sus recordatorios activos (RF13); si no tiene, 5
-            // (la OMS recomienda actividad física la mayoría de los días de la semana)
-            let metaDias = 5;
+            // Meta de días: misma regla que Inicio (días de sus recordatorios activos, RF13; si no tiene, 3 por la OMS)
+            let metaDias = META_DIAS_POR_DEFECTO;
             try {
                 const resRec = await fetchSeguro(`${API_URL}/recordatorios`);
                 const dataRec = await resRec.json();
-                if (dataRec.success) {
-                    const dias = new Set<string>();
-                    (dataRec.recordatorios || []).filter((r: any) => r.activo).forEach((r: any) => r.dias.forEach((d: string) => dias.add(d)));
-                    if (dias.size > 0) metaDias = dias.size;
-                }
+                if (dataRec.success) metaDias = metaDiasSemana(dataRec.recordatorios);
             } catch (error) {
                 console.log('No se pudieron leer los recordatorios para la meta:', error);
             }
 
-            // Meta: totalGoal es la meta semanal, weeklyGoal es lo logrado
-            const metaTotal = stats ? (stats.totalGoal || 3) : 3;
             const hydrationStr = await AsyncStorage.getItem('userHydration');
             const hydration = parseInt(hydrationStr || '0');
 
@@ -182,10 +149,10 @@ export default function EstadisticasScreen() {
             ];
 
             setEstadisticas({
-                totalEjercicios: Math.max(metaTotal, totalEjercicios),
+                totalEjercicios,
                 completados: totalEjercicios,
                 racha,
-                puntos: puntos + (totalEjercicios * 10) + (hydration * 5),
+                puntos: (totalEjercicios * 10) + (hydration * 5),
                 calorias,
                 minutos,
                 progresoSemanal,
@@ -202,37 +169,11 @@ export default function EstadisticasScreen() {
         }
     };
 
-    // Calcular racha dinámica: actualizar al entrar
-    const actualizarRacha = async () => {
-        try {
-            const lastDateStr = await AsyncStorage.getItem('lastExerciseDate');
-            const rachaStr = await AsyncStorage.getItem('streakDays');
-            const today = new Date().toDateString();
-
-            if (lastDateStr === today) return; // Ya contó hoy
-
-            const completadosHoy = await AsyncStorage.getItem('completadosHoy');
-            if (parseInt(completadosHoy || '0') > 0) {
-                const yesterday = new Date();
-                yesterday.setDate(yesterday.getDate() - 1);
-
-                let racha = parseInt(rachaStr || '0');
-                if (lastDateStr === yesterday.toDateString()) {
-                    racha += 1; // Día consecutivo
-                } else if (lastDateStr !== today) {
-                    racha = 1; // Reinicia racha
-                }
-
-                await AsyncStorage.setItem('streakDays', racha.toString());
-                await AsyncStorage.setItem('lastExerciseDate', today);
-            }
-        } catch (error) {
-            console.log('Error actualizando racha:', error);
-        }
-    };
-
-    const porcentajeCompletado = estadisticas.totalEjercicios > 0
-        ? Math.min((estadisticas.completados / estadisticas.totalEjercicios) * 100, 100)
+    // Estado de la meta: días con ejercicio esta semana frente a la meta de días (antes comparaba
+    // el total de ejercicios consigo mismo y siempre marcaba 100 %)
+    const diasConEjercicioSemana = (estadisticas.progresoSemanal || []).filter((n: number) => n > 0).length;
+    const porcentajeCompletado = estadisticas.metaDias > 0
+        ? Math.min((diasConEjercicioSemana / estadisticas.metaDias) * 100, 100)
         : 0;
     const diasSemana = ['D', 'L', 'M', 'M', 'J', 'V', 'S'];
     const maxProgreso = Math.max(...estadisticas.progresoSemanal, 1);
@@ -356,7 +297,11 @@ export default function EstadisticasScreen() {
                         </View>
                         <View style={{flex: 1, marginLeft: 16}}>
                             <Text style={[styles.progressTitle, { color: colors.text }]}>Estado de Meta</Text>
-                            <Text style={[styles.progressSubtitle, { color: colors.textSecondary }]}>Sigue así, vas muy bien</Text>
+                            <Text style={[styles.progressSubtitle, { color: colors.textSecondary }]}>
+                                {diasConEjercicioSemana >= estadisticas.metaDias
+                                    ? '¡Cumpliste tu meta de la semana!'
+                                    : `${diasConEjercicioSemana} de ${estadisticas.metaDias} días con ejercicio esta semana`}
+                            </Text>
                         </View>
                         <View style={styles.percentageCircle}>
                             <Text style={styles.percentageText}>{Math.round(porcentajeCompletado)}%</Text>

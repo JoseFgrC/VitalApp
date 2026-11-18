@@ -1176,12 +1176,12 @@ async function resumenProgreso(idUsuario) {
          WHERE id_usuario = ?`,
         [idUsuario]
     );
-    // Sesiones completadas por día de la semana actual (0 = domingo … 6 = sábado)
+    // Sesiones completadas por día de la semana actual, de lunes a domingo (índice 0 = domingo … 6 = sábado)
     const [semana] = await pool.query(
         `SELECT DAYOFWEEK(fecha_hora_inicio) - 1 AS dia_semana, COUNT(*) AS sesiones
          FROM ejercicio_realizado
          WHERE id_usuario = ? AND completado = 1
-           AND YEARWEEK(fecha_hora_inicio, 0) = YEARWEEK(CURDATE(), 0)
+           AND YEARWEEK(fecha_hora_inicio, 1) = YEARWEEK(CURDATE(), 1)   -- semana de lunes a domingo, igual que Inicio
          GROUP BY dia_semana`,
         [idUsuario]
     );
