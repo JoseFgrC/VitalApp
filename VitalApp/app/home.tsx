@@ -363,18 +363,24 @@ export default function HomeScreen() {
   const rutinasDisponibles: any[] = rutinasDelAdmin.length > 0 ? rutinasDelAdmin : allRoutines;
   const levelRoutines = rutinasDisponibles.filter((routine) => routine.nivel <= nivelPermitido);
 
-  // Enfermedades: se quitan las rutinas cuya categoría no conviene (mismas reglas que el catálogo)
-  const safeRoutines = levelRoutines.filter(
-    (routine) => !evaluarEjercicio(routine.categoria, userConditions).evitar
-  );
+  // Enfermedades: una rutina es segura solo si su categoría Y cada uno de sus ejercicios pasan
+  // las reglas de Mi salud (los ejercicios sin categoría propia toman la de la rutina)
+  const rutinaEsSegura = (routine: any) =>
+    !evaluarEjercicio(routine.categoria, userConditions).evitar &&
+    routine.exercises.every((ex: any) =>
+      !evaluarEjercicio(ex.bd?.categoria ?? ex.categoria ?? routine.categoria, userConditions).evitar);
+  const safeRoutines = levelRoutines.filter(rutinaEsSegura);
 
-  const filteredRoutines = safeRoutines.length > 0 ? safeRoutines : levelRoutines;
-
-  const currentWorkout = filteredRoutines[dayOfWeek % filteredRoutines.length];
+  // Si ninguna rutina es segura no se muestra ninguna (nunca una no recomendada)
+  const hayRutinaSegura = safeRoutines.length > 0;
+  const currentWorkout = hayRutinaSegura
+    ? safeRoutines[dayOfWeek % safeRoutines.length]
+    : { title: 'RUTINA DEL DÍA', categoria: '', nivel: 0, time: '', exercises: [] as any[] };
+  const MENSAJE_SIN_RUTINA = 'Hoy no hay una rutina adecuada para tu salud; elige un ejercicio de Recomendados';
 
   // Avance de la rutina del día: ejercicios de la rutina completados hoy según el historial de la BD
   const ejerciciosHechos = currentWorkout.exercises.filter((ex: any) => hechosHoy.includes(ex.name.toLowerCase())).length;
-  const rutinaCompletada = ejerciciosHechos === currentWorkout.exercises.length;
+  const rutinaCompletada = hayRutinaSegura && ejerciciosHechos === currentWorkout.exercises.length;
 
   // Catálogo de recomendaciones fijas (complementa los ejercicios que carga el administrador)
   const allDiscoveryWorkouts = [
@@ -692,7 +698,11 @@ export default function HomeScreen() {
                 </View>
               </View>
 
-              {rutinaCompletada ? (
+              {!hayRutinaSegura ? (
+                <Text style={[styles.planHoyTexto, { color: colors.text, marginTop: 10, marginBottom: 0 }]}>
+                  {MENSAJE_SIN_RUTINA}
+                </Text>
+              ) : rutinaCompletada ? (
                 <View style={styles.planHoyHecho} accessibilityRole="text">
                   <Ionicons name="checkmark-circle" size={34} color="#FFFFFF" />
                   <Text style={styles.planHoyBotonTexto}>Ya hiciste tu rutina de hoy</Text>
@@ -708,6 +718,7 @@ export default function HomeScreen() {
                   <Text style={styles.planHoyBotonTexto}>{ejerciciosHechos > 0 ? 'Continuar mi rutina' : 'Hacer mi rutina de hoy'}</Text>
                 </TouchableOpacity>
               )}
+              {hayRutinaSegura && (
               <Text style={[styles.planHoyTexto, { color: colors.textSecondary, marginTop: 10, marginBottom: 0 }]}>
                 {rutinaCompletada
                   ? '¡Muy bien! Mañana tendrás una rutina nueva.'
@@ -715,6 +726,7 @@ export default function HomeScreen() {
                     ? `Llevas ${ejerciciosHechos} de ${currentWorkout.exercises.length} ejercicios de hoy.`
                     : `${currentWorkout.exercises.length} ejercicios · ${currentWorkout.time.split(' - ')[0]}`}
               </Text>
+              )}
             </>
           )}
 
@@ -741,7 +753,7 @@ export default function HomeScreen() {
               <Text style={[styles.bannerTitle, { color: colors.text }]}>Tu progreso diario</Text>
               <Text style={[styles.bannerSubtitle, { color: colors.textSecondary }]}>
                 {completadosHoy > 0
-                  ? `Hoy completaste ${completadosHoy} ${completadosHoy === 1 ? 'ejercicio' : 'ejercicios'}: ${ejerciciosHechos} de ${currentWorkout.exercises.length} de tu rutina.`
+                  ? `Hoy completaste ${completadosHoy} ${completadosHoy === 1 ? 'ejercicio' : 'ejercicios'}${hayRutinaSegura ? `: ${ejerciciosHechos} de ${currentWorkout.exercises.length} de tu rutina` : ''}.`
                   : 'Aún no haces ejercicio hoy. Un poco de movimiento hace una gran diferencia.'}
               </Text>
             </View>
@@ -810,7 +822,9 @@ export default function HomeScreen() {
                     <View style={styles.challengeTextGroup}>
                         <Text style={[styles.challengeTitle, { color: colors.isDark ? '#E0E7FF' : '#1E1B4B' }]}>Meta de hoy</Text>
                         <Text style={[styles.challengeDesc, { color: colors.isDark ? '#C7D2FE' : '#4338CA' }]}>
-                            {rutinaCompletada
+                            {!hayRutinaSegura
+                              ? MENSAJE_SIN_RUTINA
+                              : rutinaCompletada
                               ? '¡Terminaste tu rutina de hoy!'
                               : `Haz los ${currentWorkout.exercises.length} ejercicios de tu rutina (nivel ${NIVEL_EN_PALABRAS[nivelPermitido]?.nombre ?? nivelPermitido})`}
                         </Text>
@@ -822,6 +836,7 @@ export default function HomeScreen() {
                     )}
                 </View>
                 
+                {hayRutinaSegura && (
                 <View style={styles.challengeProgressRow}>
                     <View style={styles.challengeDots}>
                         {currentWorkout.exercises.map((ex: any, i: number) => (
@@ -840,6 +855,7 @@ export default function HomeScreen() {
                         {ejerciciosHechos} de {currentWorkout.exercises.length}
                     </Text>
                 </View>
+                )}
             </LinearGradient>
         </View>
 
@@ -997,7 +1013,7 @@ export default function HomeScreen() {
                 <Ionicons name="checkmark-circle" size={16} color="#FFFFFF" />
                 <Text style={[styles.workoutInfo, { color: '#FFFFFF' }]}>Completada hoy</Text>
               </View>
-            ) : (
+            ) : !hayRutinaSegura ? null : (
               <View style={[styles.workoutBadge, colors.isDark && { backgroundColor: '#1E3A8A' }]}>
                 <Ionicons name="time" size={16} color="#60A5FA" />
                 <Text style={[styles.workoutInfo, colors.isDark && { color: '#DBEAFE' }]}>{currentWorkout.time}</Text>
@@ -1031,6 +1047,9 @@ export default function HomeScreen() {
             </TouchableOpacity>
           ))}
           
+          {!hayRutinaSegura ? (
+            <Text style={[styles.rutinaAvance, { color: colors.text }]}>{MENSAJE_SIN_RUTINA}</Text>
+          ) : (
           <TouchableOpacity 
             style={styles.workoutStartButton} 
             activeOpacity={0.9}
@@ -1044,6 +1063,7 @@ export default function HomeScreen() {
               <Text style={styles.workoutStartText}>{rutinaCompletada ? 'Repetir la rutina' : 'Iniciar Rutina Completa'}</Text>
             </LinearGradient>
           </TouchableOpacity>
+          )}
           {rutinaCompletada ? (
             <View style={styles.rutinaListaBox}>
               <Text style={styles.rutinaListaTitulo}>🎉 ¡Cumpliste la rutina de hoy!</Text>
