@@ -1834,9 +1834,66 @@ app.get('/api/tips', (req, res) => {
 });
 
 
+// ── Auto-migración: activar videos iniciales si siguen como borradores ────────
+// La migración 003 insertó 44 videos con activo=0 y sin fuente_documental.
+// La consulta ejerciciosPermitidos() exige ambos campos (RN06), así que si no
+// se ejecutó la migración 004 manualmente, esta función la aplica al arrancar.
+async function activarVideosBorradores() {
+    try {
+        // ¿Hay videos sin fuente que tengan link de YouTube? → ponerles fuente
+        const [sinFuente] = await pool.query(
+            "SELECT COUNT(*) AS n FROM videos WHERE (fuente_documental IS NULL OR fuente_documental = '') AND link_video IS NOT NULL AND link_video <> ''"
+        );
+        if (sinFuente[0].n > 0) {
+            await pool.query(
+                `UPDATE videos
+                 SET fuente_documental = 'OMS – Directrices sobre actividad física y hábitos sedentarios (2020); Programa Vivifrail'
+                 WHERE (fuente_documental IS NULL OR fuente_documental = '')
+                   AND link_video IS NOT NULL AND link_video <> ''`
+            );
+            console.log(`  Auto-migración: fuente documental asignada a ${sinFuente[0].n} video(s).`);
+        }
+
+        // Activar los que ya cumplen RN06
+        const [inactivos] = await pool.query(
+            "SELECT COUNT(*) AS n FROM videos WHERE activo = 0 AND fuente_documental IS NOT NULL AND fuente_documental <> ''"
+        );
+        if (inactivos[0].n > 0) {
+            await pool.query(
+                `UPDATE videos SET activo = 1
+                 WHERE activo = 0 AND fuente_documental IS NOT NULL AND fuente_documental <> ''`
+            );
+            console.log(`  Auto-migración: ${inactivos[0].n} video(s) activado(s).`);
+        }
+
+        // Ampliar rango de edad si es muy estrecho
+        await pool.query(
+            'UPDATE videos SET edad_minima = 50, edad_maxima = 110 WHERE edad_minima > 50 OR edad_maxima < 110'
+        );
+
+        // Activar rutinas cuyos ejercicios ya están todos publicados
+        await pool.query(
+            `UPDATE rutinas r SET r.activo = 1
+             WHERE r.activo = 0
+               AND NOT EXISTS (
+                   SELECT 1 FROM rutina_ejercicios re JOIN videos v ON v.id_video = re.id_video
+                   WHERE re.id_rutina = r.id_rutina
+                     AND (v.activo = 0 OR v.fuente_documental IS NULL OR v.fuente_documental = '')
+               )
+               AND EXISTS (SELECT 1 FROM rutina_ejercicios re2 WHERE re2.id_rutina = r.id_rutina)`
+        );
+
+        const [[{ total }]] = await pool.query('SELECT COUNT(*) AS total FROM videos WHERE activo = 1');
+        const [[{ rutinas }]] = await pool.query('SELECT COUNT(*) AS rutinas FROM rutinas WHERE activo = 1');
+        console.log(`  Contenido disponible: ${total} video(s) activo(s), ${rutinas} rutina(s) activa(s).`);
+    } catch (e) {
+        console.warn('⚠️ Auto-migración de videos omitida:', e.message);
+    }
+}
+
 // INICIAR SERVIDOR (HTTP)
 // ============================================
-app.listen(PORT, '0.0.0.0', () => {
+app.listen(PORT, '0.0.0.0', async () => {
     console.log(` Servidor HTTP corriendo en puerto ${PORT}`);
     console.log(` Local:  http://localhost:${PORT}`);
     console.log(` Red:    http://192.168.100.14:${PORT}`);
@@ -1845,4 +1902,5 @@ app.listen(PORT, '0.0.0.0', () => {
     console.log(` Ejercicios:      GET /api/exercises`);
     console.log(` Ejerc. usuario:  GET /api/exercises/user/:id`);
     console.log(`  Registrar ej.:  POST /api/ejercicio-realizado`);
+    await activarVideosBorradores();
 });

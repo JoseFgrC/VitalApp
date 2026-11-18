@@ -79,6 +79,10 @@ export default function AlarmaGlobal() {
                 const notifPref = await AsyncStorage.getItem('notifications');
                 if (notifPref === 'false') return;
 
+                // Sin sesión activa no se revisan recordatorios (evita bucle de 401)
+                const token = await AsyncStorage.getItem('jwtToken');
+                if (!token) return;
+
                 // Verificar si hay una alarma pospuesta pendiente
                 const ahoraMs = Date.now();
                 if (pospuestoHastaRef.current > 0 && ahoraMs >= pospuestoHastaRef.current) {

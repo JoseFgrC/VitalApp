@@ -170,6 +170,13 @@ export async function obtenerRecordatoriosLocales(): Promise<RecordatorioItem[]>
         }
     } catch (e) {}
 
+    // Sin sesión activa no se consulta al servidor; evita que el 401 dispare
+    // sesionTerminada() en bucle y reinicie la pantalla de login.
+    try {
+        const token = await AsyncStorage.getItem('jwtToken');
+        if (!token) return [];
+    } catch (e) { return []; }
+
     try {
         const res = await fetchSeguro(`${API_URL}/recordatorios`);
         const data = await res.json();

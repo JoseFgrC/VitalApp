@@ -126,10 +126,17 @@ export async function sesionTerminada() {
     redirigiendo = true;
     try {
         await Promise.all(CLAVES_SESION.map(k => AsyncStorage.removeItem(k)));
-        try { await AsyncStorage.setItem('avisoSesion', 'Tu sesión terminó. Inicia sesión de nuevo para continuar.'); } catch (e) {}
-        router.replace('/login');
+        // Si ya estamos en la pantalla de login no se redirige de nuevo: eso
+        // desmontaría el componente y borraría lo que el usuario esté escribiendo.
+        const yaEnLogin = typeof window !== 'undefined' && (
+            window.location.pathname === '/login' || window.location.pathname === '/'
+        );
+        if (!yaEnLogin) {
+            try { await AsyncStorage.setItem('avisoSesion', 'Tu sesión terminó. Inicia sesión de nuevo para continuar.'); } catch (e) {}
+            router.replace('/login');
+        }
     } finally {
-        setTimeout(() => { redirigiendo = false; }, 1500);
+        setTimeout(() => { redirigiendo = false; }, 5000);
     }
 }
 
