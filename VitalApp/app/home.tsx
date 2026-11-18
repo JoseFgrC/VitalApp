@@ -948,7 +948,7 @@ export default function HomeScreen() {
                   <Text style={[styles.cardTitle, { color: colors.text }]} numberOfLines={2}>{workout.title}</Text>
                   <View style={styles.razonRow}>
                     <Ionicons name="checkmark-circle" size={16} color="#059669" />
-                    <Text style={[styles.razonText, colors.isDark && { color: '#6EE7B7' }]} numberOfLines={1}>{workout.razon}</Text>
+                    <Text style={[styles.razonText, colors.isDark && { color: '#6EE7B7' }]} numberOfLines={2}>{workout.razon}</Text>
                   </View>
                   <View style={styles.cardInfoRow}>
                     <View style={styles.cardTimeBadge}>
