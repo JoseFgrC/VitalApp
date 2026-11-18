@@ -18,6 +18,7 @@ import { useRouter, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { sesion } from '../utils/sesion';
 import MenuInferior from '../components/MenuInferior';
 import { useTheme } from '../hooks/useTheme';
 import { API_URL } from '../constants/config';
@@ -66,7 +67,7 @@ export default function RecordatoriosScreen() {
     const cargarRecordatorios = async () => {
         try {
             setCargando(true);
-            const guardados = await AsyncStorage.getItem('recordatorios');
+            const guardados = await sesion.getItem('recordatorios');
             const notifGuardadas = await AsyncStorage.getItem('notifications');
             const locales: Recordatorio[] | null = guardados ? JSON.parse(guardados) : null;
 
@@ -88,7 +89,7 @@ export default function RecordatoriosScreen() {
                 await subirRecordatorios(lista);
             }
             setRecordatorios(lista);
-            await AsyncStorage.setItem('recordatorios', JSON.stringify(lista));
+            await sesion.setItem('recordatorios', JSON.stringify(lista));
 
             if (notifGuardadas !== null) {
                 setNotificacionesActivas(notifGuardadas === 'true');
@@ -102,7 +103,7 @@ export default function RecordatoriosScreen() {
 
     const guardarRecordatorios = async (nuevos: Recordatorio[]) => {
         setRecordatorios(nuevos);
-        await AsyncStorage.setItem('recordatorios', JSON.stringify(nuevos));
+        await sesion.setItem('recordatorios', JSON.stringify(nuevos));
         await subirRecordatorios(nuevos);
     };
 

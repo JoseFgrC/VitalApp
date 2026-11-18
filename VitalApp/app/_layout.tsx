@@ -2,6 +2,7 @@ import { Stack, usePathname } from 'expo-router';
 import { useWindowDimensions, Platform, View } from 'react-native';
 import { useEffect, useState } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { sesion } from '../utils/sesion';
 import { ThemeProvider, DefaultTheme, DarkTheme } from '@react-navigation/native';
 import { sesionTerminada } from '../utils/api';
 import { leerTamanoLetra, aplicarTamanoLetra } from '../utils/tamanoLetra';
@@ -38,22 +39,13 @@ export default function RootLayout() {
   // Sin sesión no se muestran pantallas privadas: se vuelve al login con un aviso
   useEffect(() => {
     if (RUTAS_PUBLICAS.includes(pathname)) return;
-    AsyncStorage.getItem('jwtToken')
+    sesion.getItem('jwtToken')
       .then((token) => { if (!token) setTimeout(() => sesionTerminada(), 0); })
       .catch(() => {});
   }, [pathname]);
 
-  // En la web, si se cierra sesión en otra pestaña, esta pestaña también vuelve al login
-  useEffect(() => {
-    if (Platform.OS !== 'web' || typeof window === 'undefined') return;
-    const alCambiar = (e: StorageEvent) => {
-      if (e.key === 'jwtToken' && !e.newValue && !RUTAS_PUBLICAS.includes(window.location.pathname)) {
-        sesionTerminada();
-      }
-    };
-    window.addEventListener('storage', alCambiar);
-    return () => window.removeEventListener('storage', alCambiar);
-  }, []);
+  // En la web cada pestaña tiene su propia sesión (utils/sesion.ts, sessionStorage): cerrar
+  // sesión en una pestaña no cierra las demás, así que aquí no se escuchan otras pestañas.
 
   useEffect(() => {
     if (Platform.OS === 'web') {

@@ -5,7 +5,7 @@ import {
 } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { borrarSesion } from '../utils/sesion';
 import { useTheme } from '../hooks/useTheme';
 import { API_URL } from '../constants/config';
 import { fetchSeguro } from '../utils/api';
@@ -135,7 +135,8 @@ export default function MisDatosScreen() {
                 });
                 const data = await res.json();
                 if (!data.success) return avisar('No se pudo eliminar', data.message);
-                await AsyncStorage.clear();
+                // Solo la sesión: las preferencias del dispositivo (tema, letra) se conservan
+                await borrarSesion();
                 avisar('Cuenta eliminada', data.message, () => router.replace('/login'));
             } catch (e: any) {
                 avisar('Error de conexión', e.message);

@@ -12,7 +12,7 @@ import {
 } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { sesion } from '../utils/sesion';
 import MenuInferior from '../components/MenuInferior';
 import { useTheme } from '../hooks/useTheme';
 import { API_URL } from '../constants/config';
@@ -49,7 +49,7 @@ export default function EnfermedadesScreen() {
   const cargarCondiciones = async () => {
     setLoading(true);
     try {
-      const idUsuario = await AsyncStorage.getItem('userId');
+      const idUsuario = await sesion.getItem('userId');
       setUserId(idUsuario);
       // Se leen de la BD para mostrar las condiciones de esta cuenta (no las de otra sesión)
       setSelectedConditions(await cargarCondicionesUsuario());
@@ -74,7 +74,7 @@ export default function EnfermedadesScreen() {
     const elegidas = selectedConditions.filter((c) => c !== 'Ninguna');
     const condiciones = elegidas.length > 0 ? elegidas : ['Ninguna'];
     try {
-      await AsyncStorage.setItem('userConditions', JSON.stringify(condiciones));
+      await sesion.setItem('userConditions', JSON.stringify(condiciones));
       if (userId) {
         try {
           const res = await fetchSeguro(`${API_URL}/user/${userId}`, {

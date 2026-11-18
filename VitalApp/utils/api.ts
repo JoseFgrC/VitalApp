@@ -7,7 +7,7 @@
  * ║  POST, PUT y DELETE, garantizando la integridad de los datos.    ║
  * ╚══════════════════════════════════════════════════════════════════╝
  */
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { sesion, borrarSesion } from './sesion';
 import { router } from 'expo-router';
 import { API_URL } from '../constants/config';
 
@@ -54,7 +54,7 @@ export async function fetchSeguro(url: string, options: RequestInit = {}): Promi
 
     // 1. Inyectar JWT
     try {
-        const token = await AsyncStorage.getItem('jwtToken');
+        const token = await sesion.getItem('jwtToken');
         if (token) {
             headers['Authorization'] = `Bearer ${token}`;
         }
@@ -64,7 +64,7 @@ export async function fetchSeguro(url: string, options: RequestInit = {}): Promi
     if (necesitaFirma) {
         // CSRF Token Check
         try {
-            let csrf = await AsyncStorage.getItem('csrfToken');
+            let csrf = await sesion.getItem('csrfToken');
             if (!csrf) {
                 const csrfRes = await fetch(`${API_URL}/csrf-token`, {
                     credentials: 'include'
@@ -72,7 +72,7 @@ export async function fetchSeguro(url: string, options: RequestInit = {}): Promi
                 const csrfData = await csrfRes.json();
                 if (csrfData.success) {
                     csrf = csrfData.csrfToken;
-                    await AsyncStorage.setItem('csrfToken', csrf!);
+                    await sesion.setItem('csrfToken', csrf!);
                 }
             }
             if (csrf) {
@@ -103,7 +103,7 @@ export async function fetchSeguro(url: string, options: RequestInit = {}): Promi
             const mensaje = String(data.message || '');
             // Si da error de CSRF, lo limpiamos para forzar su renovación
             if (mensaje.includes('CSRF')) {
-                await AsyncStorage.removeItem('csrfToken');
+                await sesion.removeItem('csrfToken');
             }
             // Sin sesión o con la sesión vencida: se vuelve al inicio de sesión con un aviso claro
             if (mensaje.includes('Token JWT')) {
@@ -116,17 +116,16 @@ export async function fetchSeguro(url: string, options: RequestInit = {}): Promi
 }
 
 // ── Sesión terminada ───────────────────────────────────────────────────────────
-// Pasa cuando se cierra sesión en otra pestaña (comparten el almacenamiento),
-// cuando el token vence (7 días) o al volver con «Atrás» después de salir.
-const CLAVES_SESION = ['jwtToken', 'csrfToken', 'userId', 'userName', 'userEmail', 'userAge', 'userRol', 'userConditions'];
+// Pasa cuando el token vence (7 días) o al volver con «Atrás» después de salir.
+// En la web cada pestaña tiene su propia sesión (utils/sesion.ts): solo se cierra esta.
 let redirigiendo = false;
 
 export async function sesionTerminada() {
     if (redirigiendo) return;   // varias peticiones pueden fallar a la vez: un solo aviso
     redirigiendo = true;
     try {
-        await Promise.all(CLAVES_SESION.map(k => AsyncStorage.removeItem(k)));
-        try { await AsyncStorage.setItem('avisoSesion', 'Tu sesión terminó. Inicia sesión de nuevo para continuar.'); } catch (e) {}
+        await borrarSesion();
+        try { await sesion.setItem('avisoSesion', 'Tu sesión terminó. Inicia sesión de nuevo para continuar.'); } catch (e) {}
         router.replace('/login');
     } finally {
         setTimeout(() => { redirigiendo = false; }, 1500);

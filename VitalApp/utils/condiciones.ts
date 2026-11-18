@@ -1,7 +1,7 @@
 // Reglas compartidas para adaptar los ejercicios a las condiciones de salud del usuario.
 // Las usan Inicio (recomendados y rutina del día) y el catálogo de Ejercicios, para que
 // ambas pantallas apliquen exactamente el mismo criterio.
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { sesion } from './sesion';
 import { API_URL } from '../constants/config';
 import { fetchSeguro } from './api';
 
@@ -98,19 +98,19 @@ export async function cargarCondiciones(): Promise<string[]> {
     const deTexto = (t: string | null | undefined) =>
         (t || '').split(',').map(s => s.trim()).filter(s => s && s.toLowerCase() !== 'ninguna');
     try {
-        const id = await AsyncStorage.getItem('userId');
+        const id = await sesion.getItem('userId');
         if (id) {
             const res = await fetchSeguro(`${API_URL}/user/${id}`);
             const data = await res.json();
             if (data.success && data.user) {
                 const lista = deTexto(data.user.condiciones_medicas);
-                await AsyncStorage.setItem('userConditions', JSON.stringify(lista));
+                await sesion.setItem('userConditions', JSON.stringify(lista));
                 return lista;
             }
         }
     } catch { /* sin conexión: se usa la copia local */ }
     try {
-        const local = JSON.parse((await AsyncStorage.getItem('userConditions')) || '[]');
+        const local = JSON.parse((await sesion.getItem('userConditions')) || '[]');
         return Array.isArray(local) ? local.filter((c: string) => normalizar(c) !== 'ninguna') : [];
     } catch {
         return [];

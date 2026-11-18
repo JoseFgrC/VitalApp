@@ -14,7 +14,8 @@ import {
 import { useRouter, useFocusEffect } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { sesion } from '../utils/sesion';
+import { leerHidratacion } from '../utils/hidratacion';
 import MenuInferior from '../components/MenuInferior';
 import { useTheme } from '../hooks/useTheme';
 import { API_URL } from '../constants/config';
@@ -132,8 +133,8 @@ export default function EstadisticasScreen() {
                 console.log('No se pudieron leer los recordatorios para la meta:', error);
             }
 
-            const hydrationStr = await AsyncStorage.getItem('userHydration');
-            const hydration = parseInt(hydrationStr || '0');
+            // Vasos de agua de hoy de esta cuenta (puntos y logro «Hidratación Ideal»)
+            const hydration = await leerHidratacion(await sesion.getItem('userId'));
 
             // Calcular logros dinámicamente
             const logrosActualizados = [

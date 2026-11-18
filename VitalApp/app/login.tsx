@@ -7,7 +7,7 @@ import {
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { sesion } from '../utils/sesion';
 import * as WebBrowser from 'expo-web-browser';
 import * as Google from 'expo-auth-session/providers/google';
 
@@ -292,10 +292,10 @@ export default function LoginScreen() {
     // Aviso cuando se llega aquí porque la sesión terminó (ver sesionTerminada en utils/api.ts)
     const [avisoSesion, setAvisoSesion] = useState('');
     useEffect(() => {
-        AsyncStorage.getItem('avisoSesion').then((m) => {
+        sesion.getItem('avisoSesion').then((m) => {
             if (m) {
                 setAvisoSesion(m);
-                AsyncStorage.removeItem('avisoSesion');
+                sesion.removeItem('avisoSesion');
             }
         }).catch(() => {});
     }, []);
@@ -366,12 +366,12 @@ export default function LoginScreen() {
                     return;
                 }
                 const u = data.user;
-                await AsyncStorage.setItem('userId', u.id_usuario.toString());
-                await AsyncStorage.setItem('userName', u.nombre || '');
-                await AsyncStorage.setItem('userEmail', u.email || '');
-                await AsyncStorage.setItem('userAge', (u.edad ?? '').toString());
-                await AsyncStorage.setItem('userRol', u.rol || 'usuario');
-                await AsyncStorage.setItem('jwtToken', data.token);
+                await sesion.setItem('userId', u.id_usuario.toString());
+                await sesion.setItem('userName', u.nombre || '');
+                await sesion.setItem('userEmail', u.email || '');
+                await sesion.setItem('userAge', (u.edad ?? '').toString());
+                await sesion.setItem('userRol', u.rol || 'usuario');
+                await sesion.setItem('jwtToken', data.token);
                 router.replace(await rutaInicial(u.rol || 'usuario'));
             } else {
                 setErrorLogin(true);
@@ -399,12 +399,12 @@ export default function LoginScreen() {
             const data = await res.json();
             if (data.success) {
                 const u = data.user;
-                await AsyncStorage.setItem('userId', u.id_usuario.toString());
-                await AsyncStorage.setItem('userName', u.nombre || '');
-                await AsyncStorage.setItem('userEmail', u.email || '');
-                await AsyncStorage.setItem('userAge', (u.edad ?? '').toString());
-                await AsyncStorage.setItem('userRol', u.rol || 'usuario');
-                await AsyncStorage.setItem('jwtToken', data.token);
+                await sesion.setItem('userId', u.id_usuario.toString());
+                await sesion.setItem('userName', u.nombre || '');
+                await sesion.setItem('userEmail', u.email || '');
+                await sesion.setItem('userAge', (u.edad ?? '').toString());
+                await sesion.setItem('userRol', u.rol || 'usuario');
+                await sesion.setItem('jwtToken', data.token);
                 router.replace(await rutaInicial(u.rol || 'usuario'));
             } else {
                 avisar('Error', data.message || 'Código incorrecto.');
@@ -474,12 +474,12 @@ export default function LoginScreen() {
                 setTempMfaToken(data.mfaToken);
             } else if (data.success) {
                 const u = data.user;
-                await AsyncStorage.setItem('userId', u.id_usuario.toString());
-                await AsyncStorage.setItem('userName', u.nombre || '');
-                await AsyncStorage.setItem('userEmail', u.email || '');
-                await AsyncStorage.setItem('userAge', (u.edad ?? '').toString());
-                await AsyncStorage.setItem('userRol', u.rol || 'usuario');
-                if (data.token) await AsyncStorage.setItem('jwtToken', data.token);
+                await sesion.setItem('userId', u.id_usuario.toString());
+                await sesion.setItem('userName', u.nombre || '');
+                await sesion.setItem('userEmail', u.email || '');
+                await sesion.setItem('userAge', (u.edad ?? '').toString());
+                await sesion.setItem('userRol', u.rol || 'usuario');
+                if (data.token) await sesion.setItem('jwtToken', data.token);
                 router.replace(await rutaInicial(u.rol || 'usuario'));
             } else {
                 avisar('No se pudo entrar con Google', data.message || 'Inténtalo de nuevo o entra con tu correo y contraseña.');

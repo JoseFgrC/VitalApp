@@ -6,7 +6,7 @@ import {
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { sesion, borrarSesion } from '../utils/sesion';
 import { API_URL } from '../constants/config';
 import { fetchSeguro } from '../utils/api';
 
@@ -273,7 +273,7 @@ export default function AdminScreen() {
     // ── Verificar rol admin ────────────────────────────────────────────────────
     useEffect(() => {
         (async () => {
-            const rol = await AsyncStorage.getItem('userRol');
+            const rol = await sesion.getItem('userRol');
             if (rol !== 'admin') {
                 avisar('Acceso denegado', 'Esta sección es solo para administradores.');
                 router.replace('/home');
@@ -493,16 +493,7 @@ export default function AdminScreen() {
                 <TouchableOpacity
                     style={s.btnCerrar}
                     onPress={async () => {
-                        await Promise.all([
-                            AsyncStorage.removeItem('userId'),
-                            AsyncStorage.removeItem('userName'),
-                            AsyncStorage.removeItem('userEmail'),
-                            AsyncStorage.removeItem('userAge'),
-                            AsyncStorage.removeItem('userRol'),
-                            AsyncStorage.removeItem('userWeight'),
-                            AsyncStorage.removeItem('jwtToken'),
-                            AsyncStorage.removeItem('csrfToken')
-                        ]);
+                        await borrarSesion();
                         router.replace('/login');
                     }}
                 >

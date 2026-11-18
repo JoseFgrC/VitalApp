@@ -5,7 +5,7 @@ import {
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { borrarSesion } from '../utils/sesion';
 import { useTheme } from '../hooks/useTheme';
 import { API_URL } from '../constants/config';
 import { fetchSeguro } from '../utils/api';
@@ -62,9 +62,7 @@ export default function ConsentimientoScreen() {
     };
 
     const rechazar = async () => {
-        await Promise.all(
-            ['userId', 'userName', 'userEmail', 'userAge', 'userRol', 'jwtToken'].map(k => AsyncStorage.removeItem(k))
-        );
+        await borrarSesion();
         router.replace('/login');
     };
 

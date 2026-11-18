@@ -19,6 +19,7 @@ import { useRouter, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { sesion, borrarSesion } from '../utils/sesion';
 import MenuInferior from '../components/MenuInferior';
 import { API_URL } from '../constants/config';
 import { fetchSeguro } from '../utils/api';
@@ -71,11 +72,10 @@ export default function PerfilScreen() {
         try {
             setCargando(true);
             // Cargar datos de usuario de AsyncStorage
-            const id = await AsyncStorage.getItem('userId');
-            const nombre = await AsyncStorage.getItem('userName');
-            const email = await AsyncStorage.getItem('userEmail');
-            const edad = await AsyncStorage.getItem('userAge');
-            const puntos = await AsyncStorage.getItem('userPoints');
+            const id = await sesion.getItem('userId');
+            const nombre = await sesion.getItem('userName');
+            const email = await sesion.getItem('userEmail');
+            const edad = await sesion.getItem('userAge');
 
             // Ejercicios y racha de ESTA cuenta, desde la BD (RF11)
             let ejerciciosBD = 0;
@@ -97,7 +97,7 @@ export default function PerfilScreen() {
 
             // Intentar obtener datos actualizados desde el backend (edad calculada en BD)
             let edadBackend = edad || '';
-            let pesoBackend = await AsyncStorage.getItem('userWeight') || '';
+            let pesoBackend = await sesion.getItem('userWeight') || '';
             let nombreBackend = nombre || 'Usuario';
             let emailBackend = email || '';
 
@@ -115,8 +115,8 @@ export default function PerfilScreen() {
                         }
 
                         // Actualizar AsyncStorage con los datos frescos del backend
-                        await AsyncStorage.setItem('userAge', edadBackend);
-                        if (pesoBackend) await AsyncStorage.setItem('userWeight', pesoBackend);
+                        await sesion.setItem('userAge', edadBackend);
+                        if (pesoBackend) await sesion.setItem('userWeight', pesoBackend);
                     }
                 } catch (backendError) {
                     console.log('Backend no disponible, usando datos locales');
@@ -151,9 +151,9 @@ export default function PerfilScreen() {
         setGuardando(true);
         try {
             // Guardar en AsyncStorage primero (siempre funciona)
-            await AsyncStorage.setItem('userName', usuario.nombre);
-            await AsyncStorage.setItem('userEmail', usuario.email);
-            await AsyncStorage.setItem('userAge', usuario.edad);
+            await sesion.setItem('userName', usuario.nombre);
+            await sesion.setItem('userEmail', usuario.email);
+            await sesion.setItem('userAge', usuario.edad);
 
             // Intentar guardar en el backend
             if (usuario.id) {
@@ -204,8 +204,7 @@ export default function PerfilScreen() {
             'Para volver a entrar necesitarás tu correo y tu contraseña.',
             'Sí, cerrar sesión',
             async () => {
-                await Promise.all(['userId', 'userSession', 'jwtToken', 'csrfToken', 'userName', 'userEmail', 'userAge', 'userRol', 'userConditions']
-                    .map(k => AsyncStorage.removeItem(k)));
+                await borrarSesion();
                 router.replace('/login');
             }
         );

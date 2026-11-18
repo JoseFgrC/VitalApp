@@ -6,7 +6,8 @@ import {
 import { useRouter, useFocusEffect } from 'expo-router';
 import { Ionicons, FontAwesome5, Entypo } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { sesion, borrarSesion } from '../utils/sesion';
+import { leerHidratacion, guardarHidratacion } from '../utils/hidratacion';
 import MenuInferior from '../components/MenuInferior';
 import { useTheme } from '../hooks/useTheme';
 import { getVideoIdForExercise, DAILY_TIPS } from '../constants/exercises';
@@ -103,8 +104,8 @@ export default function HomeScreen() {
 
   const cargarDatosUsuario = async () => {
     try {
-      const nombreGuardado    = await AsyncStorage.getItem('userName');
-      const userIdGuardado    = await AsyncStorage.getItem('userId');       // PK: id_usuario
+      const nombreGuardado    = await sesion.getItem('userName');
+      const userIdGuardado    = await sesion.getItem('userId');       // PK: id_usuario
 
       if (nombreGuardado)    setNombreUsuario(nombreGuardado);
       if (userIdGuardado)    setUserId(userIdGuardado);
@@ -122,11 +123,11 @@ export default function HomeScreen() {
           if (data.success && data.user?.edad != null) setEdadUsuario(Number(data.user.edad));
           if (data.success && data.user?.peso) {
             setPeso(parseFloat(data.user.peso));
-            await AsyncStorage.setItem('userWeight', data.user.peso.toString());
+            await sesion.setItem('userWeight', data.user.peso.toString());
           }
         } catch (error) {
           console.log('Sin conexión al backend, usando peso cacheado:', error);
-          const pesoGuardado = await AsyncStorage.getItem('userWeight');
+          const pesoGuardado = await sesion.getItem('userWeight');
           if (pesoGuardado) setPeso(parseFloat(pesoGuardado));
         }
       }
@@ -195,8 +196,8 @@ export default function HomeScreen() {
         setProximoRecordatorio(null);
       }
 
-      const hydrationGuardado = await AsyncStorage.getItem('userHydration');
-      if (hydrationGuardado) setHydration(parseInt(hydrationGuardado));
+      // Vasos de agua de hoy de esta cuenta
+      setHydration(await leerHidratacion(userIdGuardado));
 
       // Tip aleatorio basado en el día
       const dayOfYear = Math.floor(
@@ -221,13 +222,13 @@ export default function HomeScreen() {
   const cambiarHydration = async (delta: number) => {
     const nuevo = Math.max(0, Math.min(12, hydration + delta));
     setHydration(nuevo);
-    await AsyncStorage.setItem('userHydration', nuevo.toString());
+    await guardarHidratacion(userId, nuevo);
   };
 
   const cambiarPeso = async (delta: number) => {
     const nuevo = Math.max(20, Math.min(250, peso + delta));
     setPeso(nuevo);
-    await AsyncStorage.setItem('userWeight', nuevo.toString());
+    await sesion.setItem('userWeight', nuevo.toString());
 
     // Sincronizar con la BD — tabla usuario, campo peso
     if (userId) {
@@ -584,21 +585,8 @@ export default function HomeScreen() {
 
   const cerrarSesion = async () => {
     const limpiarStorage = async () => {
-      // Eliminar todas las claves guardadas por el login y la app
-      await Promise.all([
-        AsyncStorage.removeItem('userId'),
-        AsyncStorage.removeItem('userName'),
-        AsyncStorage.removeItem('userEmail'),
-        AsyncStorage.removeItem('userAge'),
-        AsyncStorage.removeItem('userRol'),
-        AsyncStorage.removeItem('userWeight'),
-        AsyncStorage.removeItem('userStats'),
-        AsyncStorage.removeItem('completadosHoy'),
-        AsyncStorage.removeItem('userHydration'),
-        AsyncStorage.removeItem('userConditions'),
-        AsyncStorage.removeItem('jwtToken'),
-        AsyncStorage.removeItem('csrfToken')
-      ]);
+      // Se borra solo la sesión de esta pestaña; las preferencias del dispositivo se conservan
+      await borrarSesion();
       router.replace('/login');
     };
 

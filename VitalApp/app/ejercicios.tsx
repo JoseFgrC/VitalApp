@@ -15,7 +15,7 @@ import {
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { sesion } from '../utils/sesion';
 import { API_URL } from '../constants/config';
 import { fetchSeguro } from '../utils/api';
 import { textoIntensidad, colorIntensidad, textoDuracion } from '../utils/textos';
@@ -86,7 +86,7 @@ export default function EjerciciosScreen() {
     const cargarEjercicios = async () => {
         try {
             // RN03: solo se muestran ejercicios del nivel funcional asignado o inferiores
-            const userId = await AsyncStorage.getItem('userId');
+            const userId = await sesion.getItem('userId');
             const response = await fetchSeguro(`${API_URL}/exercises/user/${userId}`);
             const data = await response.json();
 

@@ -5,7 +5,7 @@ import {
 } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { sesion, borrarSesion } from '../utils/sesion';
 import { useTheme } from '../hooks/useTheme';
 import { API_URL } from '../constants/config';
 import { fetchSeguro } from '../utils/api';
@@ -47,7 +47,7 @@ export default function CuidadorScreen() {
 
     const cargarAdultos = async () => {
         try {
-            setNombre((await AsyncStorage.getItem('userName')) || '');
+            setNombre((await sesion.getItem('userName')) || '');
             const res = await fetchSeguro(`${API_URL}/cuidador/adultos`);
             const data = await res.json();
             if (data.success) setAdultos(data.adultos);
@@ -105,9 +105,7 @@ export default function CuidadorScreen() {
     };
 
     const cerrarSesion = async () => {
-        await Promise.all(
-            ['userId', 'userName', 'userEmail', 'userAge', 'userRol', 'jwtToken', 'userConditions'].map(k => AsyncStorage.removeItem(k))
-        );
+        await borrarSesion();
         router.replace('/login');
     };
 
